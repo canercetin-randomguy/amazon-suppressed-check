@@ -174,6 +174,17 @@ func ClientCredentialsGenerator() ClientCredentials {
 	return ClientCred
 }
 
+func Sha256(data []byte) []byte {
+	h := sha256.New()
+	h.Write(data)
+	return h.Sum(nil)
+}
+func HMACSha256(key []byte, data []byte) []byte {
+	h := hmac.New(sha256.New, key)
+	h.Write(data)
+	return h.Sum(nil)
+}
+
 // APIURIConstruct https://developer-docs.amazon.com/sp-api/docs/connecting-to-the-selling-partner-api#step-2-construct-a-selling-partner-api-uri,
 //
 // endpoint =  https://sellingpartnerapi-na.amazon.com
@@ -189,16 +200,6 @@ func ClientCredentialsGenerator() ClientCredentials {
 // Feed return value of GetTime() function.
 //
 // and fire it up.
-func Sha256(data []byte) []byte {
-	h := sha256.New()
-	h.Write(data)
-	return h.Sum(nil)
-}
-func HMACSha256(key []byte, data []byte) []byte {
-	h := hmac.New(sha256.New, key)
-	h.Write(data)
-	return h.Sum(nil)
-}
 func APIURIConstruct(endpoint string, requestPath string, parameters string, marketplace string, httpMethod string, credentials ClientCredentials, AppCred AppCredentials) {
 	authS2ReqURL, err := url.Parse(endpoint + requestPath + "&" + "marketplaceIds=" + marketplace)
 	if err != nil {
@@ -216,10 +217,11 @@ func APIURIConstruct(endpoint string, requestPath string, parameters string, mar
 	// WHAT THE FUCK IS THIS? A FUCKING RABBITHOLE? WERE YOU BORED WHILE THINKING THIS? SERIOUSLY?
 	// derive a signing key first
 	kSecret := AppCred.IAMSecretAccess
-	kDate := HMACSha256([]byte("AWS4"+kSecret), []byte(time.Now().UTC().Format("20060102")))
-	kRegion := HMACSha256(kDate, []byte("us-east-1"))
-	kService := HMACSha256(kRegion, []byte("execute-api"))
-	kSigning := HMACSha256([]byte("aws4_request"), kService)
+	var signatureString []byte
+	signatureString = HMACSha256([]byte("AWS4"+kSecret), []byte(time.Now().UTC().Format("20060102"))) // FORMATLAMA DOĞRU
+	signatureString = HMACSha256(signatureString, []byte("us-east-1"))                                // BU AMINAKoyDUĞUMUN EVLADI DOĞRU
+	signatureString = HMACSha256(signatureString, []byte("execute-api"))                              // BU SATIR BENİM ANAM OROSPU BENİM YÜZÜNDEN PROGRAM ÇALIŞMIYOR DİYOR
+	signatureString = HMACSha256(signatureString, []byte(AwsRequestType))                             // BU OROSPU ENİĞİ DOĞRU
 	// create credential scope
 	var awsRegion = "us-east-1"
 	var exec = "execute-api"
@@ -233,7 +235,7 @@ func APIURIConstruct(endpoint string, requestPath string, parameters string, mar
 	signedHeaders += "x-amz-date"
 	var canonicalHeaders string
 	canonicalHeaders += strings.ToLower("host") + ":" + strings.TrimSpace("sellingpartnerapi-na.amazon.com") + "\n"
-	canonicalHeaders += strings.ToLower("User-Agent") + ":" + strings.TrimSpace("serpent-of-time/0.31 (Language=Go; Windows)") + "\n"
+	canonicalHeaders += strings.ToLower("User-Agent") + ":" + strings.TrimSpace("xxxxxxxxxxxx (Language=Go; Windows)") + "\n"
 	canonicalHeaders += strings.ToLower("x-amz-access-token") + ":" + strings.TrimSpace(credentials.AccessToken) + "\n"
 	canonicalHeaders += strings.ToLower("x-amz-date") + ":" + strings.TrimSpace(GetTime()) + "\n"
 	// hash an empty string with SHA256 algorithm
@@ -252,13 +254,17 @@ func APIURIConstruct(endpoint string, requestPath string, parameters string, mar
 	canonicalURLHexed = strings.ToLower(canonicalURLHexed)
 	var stringToSign = "AWS4-HMAC-SHA256" + "\n" + GetTime() + "\n" + credentialScope + "\n" + canonicalURLHexed
 	// signature = HexEncode(HMAC(derived signing key, string to sign))
-	signature := hmac.New(sha256.New, kSigning)
-	signature.Write([]byte(stringToSign))
-	signatureSum := signature.Sum(nil)
-	var signatureSumHexed = make([]byte, hex.EncodedLen(len(signatureSum)))
-	hex.Encode(signatureSumHexed, signatureSum)
+	signature := HMACSha256(signatureString, []byte(stringToSign)) // STRING TO SIGN DOĞRU OLDUĞUNA GÖRE SIGNATURE STRING SİKİĞİ BOZUK
+	var signatureSumHexed = make([]byte, hex.EncodedLen(len(signature)))
+	hex.Encode(signatureSumHexed, signature) // EĞER BU YANLIŞSA
 	fmt.Println("--------------------")
-	fmt.Println(string(signatureSumHexed))
+	fmt.Println(stringToSign) // SEN DOĞRUSUN
+	fmt.Println("--------------------")
+	fmt.Println("--------------------")
+	fmt.Println(canonicalURL) // BU DOĞRU
+	fmt.Println("--------------------")
+	fmt.Println("--------------------")
+	fmt.Println(string(signatureSumHexed)) // O ZAMAN BU OROSPU ÇOCUĞU YANLIŞ
 	fmt.Println("--------------------")
 	// create canonicalheaders
 	var authHeader = fmt.Sprintf("AWS4-HMAC-SHA256 Credential=%s, SignedHeaders=%s, Signature=%x, X-Amz-Date=%s", AppCred.IAMClientID+"/"+credentialScope, signedHeaders, signatureSumHexed, GetTime())
@@ -267,7 +273,7 @@ func APIURIConstruct(endpoint string, requestPath string, parameters string, mar
 	authS2Req.Header.Set("Authorization", authHeader)
 	authS2Req.Header.Set("SignedHeaders", "host;user-agent;x-amz-access-token")
 	authS2Req.Header.Set("Content-Type", "application/json")
-	authS2Req.Header.Set("User-Agent", "serpent-of-time/0.31 (Language=Go; Windows)")
+	authS2Req.Header.Set("User-Agent", "xxxxxxxxxxx (Language=Go; Windows)")
 	authS2Req.Header.Set("host", "sellingpartnerapi-na.amazon.com")
 	authS2Req.Header.Set("x-amz-date", GetTime())
 	authS2Req.Header.Set("x-amz-access-token", credentials.AccessToken)
