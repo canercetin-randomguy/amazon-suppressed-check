@@ -93,6 +93,17 @@ type ProductDetails struct {
 		Quantity               int    `json:"quantity"`
 	} `json:"fulfillmentAvailability"`
 }
+type AwsRequestSigner struct {
+	RegionName             string
+	AwsSecurityCredentials map[string]string
+}
+
+const (
+	AwsAlgorithm         = "AWS4-HMAC-SHA256"
+	AwsRequestType       = "aws4_request"
+	AwsAccessTokenHeader = "x-amz-access-token"
+	AwsDateHeader        = "x-amz-date"
+)
 
 type ClientCredentials struct {
 	AccessToken  string `json:"access_token"`
@@ -178,6 +189,16 @@ func ClientCredentialsGenerator() ClientCredentials {
 // Feed return value of GetTime() function.
 //
 // and fire it up.
+func Sha256(data []byte) []byte {
+	h := sha256.New()
+	h.Write(data)
+	return h.Sum(nil)
+}
+func HMACSha256(key []byte, data []byte) []byte {
+	h := hmac.New(sha256.New, key)
+	h.Write(data)
+	return h.Sum(nil)
+}
 func APIURIConstruct(endpoint string, requestPath string, parameters string, marketplace string, httpMethod string, credentials ClientCredentials, AppCred AppCredentials) {
 	authS2ReqURL, err := url.Parse(endpoint + requestPath + "&" + "marketplaceIds=" + marketplace)
 	if err != nil {
@@ -195,18 +216,10 @@ func APIURIConstruct(endpoint string, requestPath string, parameters string, mar
 	// WHAT THE FUCK IS THIS? A FUCKING RABBITHOLE? WERE YOU BORED WHILE THINKING THIS? SERIOUSLY?
 	// derive a signing key first
 	kSecret := AppCred.IAMSecretAccess
-	kDate := hmac.New(sha256.New, []byte("AWS4"+kSecret))
-	kDate.Write([]byte(time.Now().UTC().Format("20060102")))
-	kDateSum := kDate.Sum(nil)
-	kRegion := hmac.New(sha256.New, kDateSum)
-	kRegion.Write([]byte("us-east-1"))
-	kRegionSum := kRegion.Sum(nil)
-	kService := hmac.New(sha256.New, kRegionSum)
-	kService.Write([]byte("execute-api"))
-	kServiceSum := kService.Sum(nil)
-	kSigning := hmac.New(sha256.New, []byte("aws4_request"))
-	kSigning.Write(kServiceSum)
-	kSigningSum := kSigning.Sum(nil)
+	kDate := HMACSha256([]byte("AWS4"+kSecret), []byte(time.Now().UTC().Format("20060102")))
+	kRegion := HMACSha256(kDate, []byte("us-east-1"))
+	kService := HMACSha256(kRegion, []byte("execute-api"))
+	kSigning := HMACSha256([]byte("aws4_request"), kService)
 	// create credential scope
 	var awsRegion = "us-east-1"
 	var exec = "execute-api"
@@ -220,13 +233,11 @@ func APIURIConstruct(endpoint string, requestPath string, parameters string, mar
 	signedHeaders += "x-amz-date"
 	var canonicalHeaders string
 	canonicalHeaders += strings.ToLower("host") + ":" + strings.TrimSpace("sellingpartnerapi-na.amazon.com") + "\n"
-	canonicalHeaders += strings.ToLower("User-Agent") + ":" + strings.TrimSpace("XXXXXXXX (Language=Go; Windows)") + "\n"
+	canonicalHeaders += strings.ToLower("User-Agent") + ":" + strings.TrimSpace("serpent-of-time/0.31 (Language=Go; Windows)") + "\n"
 	canonicalHeaders += strings.ToLower("x-amz-access-token") + ":" + strings.TrimSpace(credentials.AccessToken) + "\n"
 	canonicalHeaders += strings.ToLower("x-amz-date") + ":" + strings.TrimSpace(GetTime()) + "\n"
 	// hash an empty string with SHA256 algorithm
-	h := sha256.New()
-	h.Write([]byte(""))
-	emptyHash := h.Sum(nil)
+	emptyHash := Sha256([]byte(""))
 	// crete url encoded query string
 	tempURL, _ := url.Parse(requestPath)
 	// have the marketplaces in the query string, but escape the string.
@@ -236,20 +247,12 @@ func APIURIConstruct(endpoint string, requestPath string, parameters string, mar
 	escapedURL := tempURL.String() + query
 	canonicalURL = fmt.Sprintf("%s\n%s\n\n%s\n\n%s\n%x", httpMethod, escapedURL,
 		strings.TrimSpace(canonicalHeaders), strings.TrimSpace(signedHeaders), string(emptyHash))
-	fmt.Println("--------------------")
-	fmt.Println(canonicalURL)
-	fmt.Println("--------------------")
-	canonicalURL256 := sha256.New()
-	canonicalURL256.Write([]byte(canonicalURL))
-	canonicalURL256Sum := canonicalURL256.Sum(nil)
-	canonicalURLHexed := hex.EncodeToString(canonicalURL256Sum)
+	canonicalURL256 := Sha256([]byte(canonicalURL))
+	canonicalURLHexed := hex.EncodeToString(canonicalURL256)
 	canonicalURLHexed = strings.ToLower(canonicalURLHexed)
 	var stringToSign = "AWS4-HMAC-SHA256" + "\n" + GetTime() + "\n" + credentialScope + "\n" + canonicalURLHexed
-	fmt.Println("--------------------")
-	fmt.Println(stringToSign)
-	fmt.Println("--------------------")
 	// signature = HexEncode(HMAC(derived signing key, string to sign))
-	signature := hmac.New(sha256.New, kSigningSum)
+	signature := hmac.New(sha256.New, kSigning)
 	signature.Write([]byte(stringToSign))
 	signatureSum := signature.Sum(nil)
 	var signatureSumHexed = make([]byte, hex.EncodedLen(len(signatureSum)))
@@ -264,7 +267,7 @@ func APIURIConstruct(endpoint string, requestPath string, parameters string, mar
 	authS2Req.Header.Set("Authorization", authHeader)
 	authS2Req.Header.Set("SignedHeaders", "host;user-agent;x-amz-access-token")
 	authS2Req.Header.Set("Content-Type", "application/json")
-	authS2Req.Header.Set("User-Agent", "XXXXXXXX (Language=Go; Windows)")
+	authS2Req.Header.Set("User-Agent", "serpent-of-time/0.31 (Language=Go; Windows)")
 	authS2Req.Header.Set("host", "sellingpartnerapi-na.amazon.com")
 	authS2Req.Header.Set("x-amz-date", GetTime())
 	authS2Req.Header.Set("x-amz-access-token", credentials.AccessToken)
