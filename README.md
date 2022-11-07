@@ -16,3 +16,5 @@ signatureString = HMACSha256([]byte("AWS4"+kSecret), []byte(time.Now().UTC().For
 and i cant figure it out.
 
 among all the things I did, Amazon pushed my sanity farthest among the other things. congrulations.
+
+**PLEASE DONT RECOMMEND ME AWS SDK FOR GOLANG, IT STRAIGHT DOESNT WORK WITH SP-API.**
