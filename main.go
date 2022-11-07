@@ -224,6 +224,7 @@ func APIURIConstruct(endpoint string, requestPath string, parameters string, mar
 	signatureString = HMACSha256(signatureString, []byte("us-east-1"))                                // BU AMINAKoyDUĞUMUN EVLADI DOĞRU
 	signatureString = HMACSha256(signatureString, []byte("execute-api"))                              // BU SATIR BENİM ANAM OROSPU BENİM YÜZÜNDEN PROGRAM ÇALIŞMIYOR DİYOR
 	signatureString = HMACSha256(signatureString, []byte(AwsRequestType))                             // BU OROSPU ENİĞİ DOĞRU
+	fmt.Println(hex.EncodeToString(signatureString))
 	// create credential scope
 	var awsRegion = "us-east-1"
 	var exec = "execute-api"
@@ -237,8 +238,8 @@ func APIURIConstruct(endpoint string, requestPath string, parameters string, mar
 	signedHeaders += "x-amz-date"
 	var canonicalHeaders string
 	canonicalHeaders += strings.ToLower("host") + ":" + strings.TrimSpace("sellingpartnerapi-na.amazon.com") + "\n"
-	canonicalHeaders += strings.ToLower("User-Agent") + ":" + strings.TrimSpace("xxxxxxxxxxxxx/0.31 (Language=Go; Windows)") + "\n"
-	canonicalHeaders += strings.ToLower("x-amz-access-token") + ":" + strings.TrimSpace(credentials.AccessToken) + "\n"
+	canonicalHeaders += strings.ToLower("User-Agent") + ":" + strings.TrimSpace("XXXXXXXXXXX/0.31 (Language=Go; Windows)") + "\n"
+	canonicalHeaders += strings.ToLower("x-amz-access-token") + ":" + strings.TrimSpace(ClientCred.AccessToken) + "\n"
 	canonicalHeaders += strings.ToLower("x-amz-date") + ":" + strings.TrimSpace(GetTime()) + "\n"
 	// hash an empty string with SHA256 algorithm
 	emptyHash := Sha256([]byte(""))
@@ -246,16 +247,11 @@ func APIURIConstruct(endpoint string, requestPath string, parameters string, mar
 	tempURL, _ := url.Parse(requestPath)
 	// have the marketplaces in the query string, but escape the string.
 	var query string
-	query += url.QueryEscape("&marketplaceIds=" + marketplace)
-	query += url.QueryEscape("&" + parameters)
-	// create escaped string
-	escapedURL := tempURL.String() + query
-	canonicalURL = fmt.Sprintf("%s\n%s\n\n%s\n\n%s\n%x", httpMethod, escapedURL,
+	query += parameters
+	query += "&marketplaceIds=" + marketplace
+	canonicalURL = fmt.Sprintf("%s\n%s\n%s\n%s\n\n%s\n%x", httpMethod, tempURL, query,
 		strings.TrimSpace(canonicalHeaders), strings.TrimSpace(signedHeaders), string(emptyHash))
-	canonicalURL256 := Sha256([]byte(canonicalURL))
-	canonicalURLHexed := hex.EncodeToString(canonicalURL256)
-	canonicalURLHexed = strings.ToLower(canonicalURLHexed)
-	var stringToSign = "AWS4-HMAC-SHA256" + "\n" + GetTime() + "\n" + credentialScope + "\n" + canonicalURLHexed
+	var stringToSign = "AWS4-HMAC-SHA256" + "\n" + GetTime() + "\n" + credentialScope + "\n" + strings.ToLower(hex.EncodeToString(Sha256([]byte(canonicalURL))))
 	// signature = HexEncode(HMAC(derived signing key, string to sign))
 	signature := HMACSha256(signatureString, []byte(stringToSign)) // STRING TO SIGN DOĞRU OLDUĞUNA GÖRE SIGNATURE STRING SİKİĞİ BOZUK
 	var signatureSumHexed = make([]byte, hex.EncodedLen(len(signature)))
@@ -276,9 +272,9 @@ func APIURIConstruct(endpoint string, requestPath string, parameters string, mar
 	authS2Req.Header.Set("Authorization", authHeader)
 	authS2Req.Header.Set("SignedHeaders", "host;user-agent;x-amz-access-token")
 	authS2Req.Header.Set("Content-Type", "application/json")
-	authS2Req.Header.Set("User-Agent", "xxxxxxxxx/0.31 (Language=Go; Windows)")
+	authS2Req.Header.Set("User-Agent", "XXXXXXXXX/0.31 (Language=Go; Windows)")
 	authS2Req.Header.Set("X-Amz-Date", GetTime())
-	authS2Req.Header.Set("x-amz-access-token", credentials.AccessToken)
+	authS2Req.Header.Set("x-amz-access-token", ClientCred.AccessToken)
 	resp, err := http.DefaultClient.Do(authS2Req)
 	fmt.Println(resp.Header)
 	if err != nil {
