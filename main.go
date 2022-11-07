@@ -201,7 +201,7 @@ func HMACSha256(key []byte, data []byte) []byte {
 //
 // and fire it up.
 func APIURIConstruct(endpoint string, requestPath string, parameters string, marketplace string, httpMethod string, credentials ClientCredentials, AppCred AppCredentials) {
-	authS2ReqURL, err := url.Parse(endpoint + requestPath + "&" + "marketplaceIds=" + marketplace)
+	authS2ReqURL, err := url.Parse(endpoint + requestPath + "?" + "marketplaceIds=" + marketplace + "&" + parameters)
 	if err != nil {
 		panic(err)
 	}
@@ -216,8 +216,10 @@ func APIURIConstruct(endpoint string, requestPath string, parameters string, mar
 	// calculate the signature
 	// WHAT THE FUCK IS THIS? A FUCKING RABBITHOLE? WERE YOU BORED WHILE THINKING THIS? SERIOUSLY?
 	// derive a signing key first
+	// hash the kSecret
 	kSecret := AppCred.IAMSecretAccess
 	var signatureString []byte
+	fmt.Println(time.Now().UTC().Format("20060102"))
 	signatureString = HMACSha256([]byte("AWS4"+kSecret), []byte(time.Now().UTC().Format("20060102"))) // FORMATLAMA DOĞRU
 	signatureString = HMACSha256(signatureString, []byte("us-east-1"))                                // BU AMINAKoyDUĞUMUN EVLADI DOĞRU
 	signatureString = HMACSha256(signatureString, []byte("execute-api"))                              // BU SATIR BENİM ANAM OROSPU BENİM YÜZÜNDEN PROGRAM ÇALIŞMIYOR DİYOR
@@ -235,7 +237,7 @@ func APIURIConstruct(endpoint string, requestPath string, parameters string, mar
 	signedHeaders += "x-amz-date"
 	var canonicalHeaders string
 	canonicalHeaders += strings.ToLower("host") + ":" + strings.TrimSpace("sellingpartnerapi-na.amazon.com") + "\n"
-	canonicalHeaders += strings.ToLower("User-Agent") + ":" + strings.TrimSpace("xxxxxxxxxxxx (Language=Go; Windows)") + "\n"
+	canonicalHeaders += strings.ToLower("User-Agent") + ":" + strings.TrimSpace("xxxxxxxxxxxxx/0.31 (Language=Go; Windows)") + "\n"
 	canonicalHeaders += strings.ToLower("x-amz-access-token") + ":" + strings.TrimSpace(credentials.AccessToken) + "\n"
 	canonicalHeaders += strings.ToLower("x-amz-date") + ":" + strings.TrimSpace(GetTime()) + "\n"
 	// hash an empty string with SHA256 algorithm
@@ -245,6 +247,7 @@ func APIURIConstruct(endpoint string, requestPath string, parameters string, mar
 	// have the marketplaces in the query string, but escape the string.
 	var query string
 	query += url.QueryEscape("&marketplaceIds=" + marketplace)
+	query += url.QueryEscape("&" + parameters)
 	// create escaped string
 	escapedURL := tempURL.String() + query
 	canonicalURL = fmt.Sprintf("%s\n%s\n\n%s\n\n%s\n%x", httpMethod, escapedURL,
@@ -267,28 +270,27 @@ func APIURIConstruct(endpoint string, requestPath string, parameters string, mar
 	fmt.Println(string(signatureSumHexed)) // O ZAMAN BU OROSPU ÇOCUĞU YANLIŞ
 	fmt.Println("--------------------")
 	// create canonicalheaders
-	var authHeader = fmt.Sprintf("AWS4-HMAC-SHA256 Credential=%s, SignedHeaders=%s, Signature=%x, X-Amz-Date=%s", AppCred.IAMClientID+"/"+credentialScope, signedHeaders, signatureSumHexed, GetTime())
+	var authHeader = fmt.Sprintf("AWS4-HMAC-SHA256 Credential=%s, SignedHeaders=%s, Signature=%x", AppCred.IAMClientID+"/"+credentialScope, signedHeaders, signatureSumHexed)
 	// start writing to canonicalHeaders one by one
-	// create authheader, god fuck me this is never-ending rabbit hole of... words arent enough to describe this mess.
+	// create authheader, god fuck me this is never-ending rabbit hole of... words aren't enough to describe this mess.
 	authS2Req.Header.Set("Authorization", authHeader)
 	authS2Req.Header.Set("SignedHeaders", "host;user-agent;x-amz-access-token")
 	authS2Req.Header.Set("Content-Type", "application/json")
-	authS2Req.Header.Set("User-Agent", "xxxxxxxxxxx (Language=Go; Windows)")
-	authS2Req.Header.Set("host", "sellingpartnerapi-na.amazon.com")
-	authS2Req.Header.Set("x-amz-date", GetTime())
+	authS2Req.Header.Set("User-Agent", "xxxxxxxxx/0.31 (Language=Go; Windows)")
+	authS2Req.Header.Set("X-Amz-Date", GetTime())
 	authS2Req.Header.Set("x-amz-access-token", credentials.AccessToken)
 	resp, err := http.DefaultClient.Do(authS2Req)
+	fmt.Println(resp.Header)
 	if err != nil {
 		panic(err)
 	}
 	respData, err := io.ReadAll(resp.Body)
 	fmt.Println(string(respData))
-	var tempItemData ProductDetails
+	/* var tempItemData ProductDetails
 	err = json.Unmarshal(respData, &tempItemData)
 	if err != nil {
 		panic(err)
-	}
-	fmt.Println(string(respData))
+	} */
 }
 func GetTime() string {
 	return time.Now().UTC().Format("20060102T150405Z")
