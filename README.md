@@ -18,3 +18,5 @@ and i cant figure it out.
 among all the things I did, Amazon pushed my sanity farthest among the other things. congrulations.
 
 **PLEASE DONT RECOMMEND ME AWS SDK FOR GOLANG, IT STRAIGHT DOESNT WORK WITH SP-API.**
+
+every information is correct when requested with postman, but signature calculation is wrong with main.go.
