@@ -1,16 +1,17 @@
 package main
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/spf13/viper"
 	"io"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 )
 
@@ -200,82 +201,30 @@ func HMACSha256(key []byte, data []byte) []byte {
 // Feed return value of GetTime() function.
 //
 // and fire it up.
-func APIURIConstruct(endpoint string, requestPath string, parameters string, marketplace string, httpMethod string, credentials ClientCredentials, AppCred AppCredentials) {
+func APIURIConstruct(endpoint string, requestPath string, parameters string, marketplace string, httpMethod string, ClientCred ClientCredentials, AppCred AppCredentials) {
 	authS2ReqURL, err := url.Parse(endpoint + requestPath + "?" + "marketplaceIds=" + marketplace + "&" + parameters)
 	if err != nil {
 		panic(err)
 	}
 	fmt.Println(authS2ReqURL.String())
-	authS2Req, err := http.NewRequest(httpMethod, authS2ReqURL.String(), nil)
+	authS2ReqURLREQ, err := http.NewRequest(httpMethod, authS2ReqURL.String(), nil)
 	if err != nil {
 		panic(err)
 	}
-	// CREATE CANONICAL URL
-	var canonicalURL string
-
-	// calculate the signature
-	// WHAT THE FUCK IS THIS? A FUCKING RABBITHOLE? WERE YOU BORED WHILE THINKING THIS? SERIOUSLY?
-	// derive a signing key first
-	// hash the kSecret
-	kSecret := AppCred.IAMSecretAccess
-	var signatureString []byte
-	fmt.Println(time.Now().UTC().Format("20060102"))
-	signatureString = HMACSha256([]byte("AWS4"+kSecret), []byte(time.Now().UTC().Format("20060102"))) // FORMATLAMA DOĞRU
-	signatureString = HMACSha256(signatureString, []byte("us-east-1"))                                // BU AMINAKoyDUĞUMUN EVLADI DOĞRU
-	signatureString = HMACSha256(signatureString, []byte("execute-api"))                              // BU SATIR BENİM ANAM OROSPU BENİM YÜZÜNDEN PROGRAM ÇALIŞMIYOR DİYOR
-	signatureString = HMACSha256(signatureString, []byte(AwsRequestType))                             // BU OROSPU ENİĞİ DOĞRU
-	fmt.Println(hex.EncodeToString(signatureString))
-	// create credential scope
-	var awsRegion = "us-east-1"
-	var exec = "execute-api"
-	var terminationString = "aws4_request"
-	var credentialScope = time.Now().UTC().Format("20060102") + "/" + awsRegion + "/" + exec + "/" + terminationString
-	// create a string to sign and declare signedHeaders and canonicalheaders.
-	var signedHeaders string
-	signedHeaders += "host;"
-	signedHeaders += "user-agent;"
-	signedHeaders += "x-amz-access-token;"
-	signedHeaders += "x-amz-date"
-	var canonicalHeaders string
-	canonicalHeaders += strings.ToLower("host") + ":" + strings.TrimSpace("sellingpartnerapi-na.amazon.com") + "\n"
-	canonicalHeaders += strings.ToLower("User-Agent") + ":" + strings.TrimSpace("XXXXXXXXXXX/0.31 (Language=Go; Windows)") + "\n"
-	canonicalHeaders += strings.ToLower("x-amz-access-token") + ":" + strings.TrimSpace(ClientCred.AccessToken) + "\n"
-	canonicalHeaders += strings.ToLower("x-amz-date") + ":" + strings.TrimSpace(GetTime()) + "\n"
-	// hash an empty string with SHA256 algorithm
-	emptyHash := Sha256([]byte(""))
-	// crete url encoded query string
-	tempURL, _ := url.Parse(requestPath)
-	// have the marketplaces in the query string, but escape the string.
-	var query string
-	query += parameters
-	query += "&marketplaceIds=" + marketplace
-	canonicalURL = fmt.Sprintf("%s\n%s\n%s\n%s\n\n%s\n%x", httpMethod, tempURL, query,
-		strings.TrimSpace(canonicalHeaders), strings.TrimSpace(signedHeaders), string(emptyHash))
-	var stringToSign = "AWS4-HMAC-SHA256" + "\n" + GetTime() + "\n" + credentialScope + "\n" + strings.ToLower(hex.EncodeToString(Sha256([]byte(canonicalURL))))
-	// signature = HexEncode(HMAC(derived signing key, string to sign))
-	signature := HMACSha256(signatureString, []byte(stringToSign)) // STRING TO SIGN DOĞRU OLDUĞUNA GÖRE SIGNATURE STRING SİKİĞİ BOZUK
-	var signatureSumHexed = make([]byte, hex.EncodedLen(len(signature)))
-	hex.Encode(signatureSumHexed, signature) // EĞER BU YANLIŞSA
-	fmt.Println("--------------------")
-	fmt.Println(stringToSign) // SEN DOĞRUSUN
-	fmt.Println("--------------------")
-	fmt.Println("--------------------")
-	fmt.Println(canonicalURL) // BU DOĞRU
-	fmt.Println("--------------------")
-	fmt.Println("--------------------")
-	fmt.Println(string(signatureSumHexed)) // O ZAMAN BU OROSPU ÇOCUĞU YANLIŞ
-	fmt.Println("--------------------")
-	// create canonicalheaders
-	var authHeader = fmt.Sprintf("AWS4-HMAC-SHA256 Credential=%s, SignedHeaders=%s, Signature=%x", AppCred.IAMClientID+"/"+credentialScope, signedHeaders, signatureSumHexed)
-	// start writing to canonicalHeaders one by one
-	// create authheader, god fuck me this is never-ending rabbit hole of... words aren't enough to describe this mess.
-	authS2Req.Header.Set("Authorization", authHeader)
-	authS2Req.Header.Set("SignedHeaders", "host;user-agent;x-amz-access-token")
-	authS2Req.Header.Set("Content-Type", "application/json")
-	authS2Req.Header.Set("User-Agent", "XXXXXXXXX/0.31 (Language=Go; Windows)")
-	authS2Req.Header.Set("X-Amz-Date", GetTime())
-	authS2Req.Header.Set("x-amz-access-token", ClientCred.AccessToken)
-	resp, err := http.DefaultClient.Do(authS2Req)
+	authS2ReqURLREQ.Header.Set("x-amz-access-token", ClientCred.AccessToken)
+	fmt.Println(ClientCred.AccessToken)
+	authS2ReqURLREQ.Header.Set("Content-Type", "application/json")
+	authS2ReqURLREQ.Header.Set("x-amz-date", GetTime())
+	authS2ReqURLREQ.Header.Set("host", "sellingpartnerapi-na.amazon.com")
+	authS2ReqURLREQ.Header.Set("user-agent", "xxxxxx/1.0 (Language=Go; Platform=Windows)")
+	// declare a new signer signer := v4.NewSigner(&credentials.Credentials{}) but only fill the third parameter.
+	signer := v4.NewSigner()
+	signer.SignHTTP(context.Background(), aws.Credentials{
+		AccessKeyID:     AppCred.IAMClientID,
+		SecretAccessKey: AppCred.IAMSecretAccess,
+	}, authS2ReqURLREQ, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "execute-api",
+		"us-east-1", time.Now().UTC())
+	resp, err := http.DefaultClient.Do(authS2ReqURLREQ)
 	fmt.Println(resp.Header)
 	if err != nil {
 		panic(err)
@@ -299,6 +248,6 @@ func main() {
 	// Call the searchCatalogItems operation to search for existing items in the Amazon catalog by product identifiers (UPC, EAN, etc.) or keywords.
 	var tempASIN = "B00ABALPNA"
 	var searchCatalogAbsolutePath = fmt.Sprintf("/catalog/2022-04-01/items")
-	var parameters = fmt.Sprintf("?identifiers=%s?identifiersType=%s", tempASIN, "ASIN")
+	var parameters = fmt.Sprintf("identifiers=%s&identifiersType=%s", tempASIN, "ASIN")
 	APIURIConstruct("https://sellingpartnerapi-na.amazon.com", searchCatalogAbsolutePath, parameters, "ATVPDKIKX0DER", "GET", ClientCredentialsGenerator(), GetCredentials())
 }
