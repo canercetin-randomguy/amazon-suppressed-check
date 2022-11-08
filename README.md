@@ -1,4 +1,4 @@
-# club-noira
+# Amazon Suppressed Check
 Amazon Suppressed Check is a tool to add products and see if they are search suppressed or not. Not even that stupid arbitrage scripts could gave us if item is search suppressed, so here I am. Doing a useful shit, what a surprise.
 
 Workflow:
