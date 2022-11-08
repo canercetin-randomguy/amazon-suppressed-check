@@ -15,6 +15,7 @@ Workflow:
 10. Detect if there is any issues, by if issues are non-empty or summary is empty (not BUYABLE,DISCOVERABLE etc.) If it is problematic, then it is either incompleted, or search suppressed.
 
 TODO: Declare tempASIN and productName from csv file, so automate it.
+
 TODO: Change workflow depending on number of search results from /catalog/2022-04-01/items
 
 
