@@ -413,8 +413,10 @@ func main() {
 					if success {
 						ListingDetails, success := ReturnListingDetails(tempCred, ClientCreds, "asd-31")
 						if success {
+							isSummariesEmpty := reflect.DeepEqual(ListingDetails.Summaries, []ListingsDetailPayloadSummaries{})
+							isIssuesEmpty := reflect.DeepEqual(ListingDetails.Issues, []ListingsDetailPayloadIssuses{})
 							// Summaries may be empty but issues may have data, case 1.
-							if ListingDetails.Summaries == nil && ListingDetails.Issues != nil {
+							if isSummariesEmpty && isIssuesEmpty == false {
 								logger.Errorf("Listing %s is suppressed and not discorable nor buyable due to: ", tempASIN)
 								for _, issue := range ListingDetails.Issues {
 									logger.Errorln("Code: ", issue.Code, "Message: ", issue.Message)
@@ -423,9 +425,8 @@ func main() {
 								logger.Errorln("If message is blank, then only vendor can fix the problem.")
 								break
 								// Summaries and issues may not have data, case 2. Listing is created but not updated, yet. Sleep a bit and try again.
-							} else if reflect.DeepEqual(ListingDetails.Summaries, []ListingsDetailPayloadSummaries{}) == true &&
-								reflect.DeepEqual(ListingDetails.Issues, []ListingsDetailPayloadIssuses{}) == true {
-								time.Sleep(10 * time.Second)
+							} else if isSummariesEmpty == true && isIssuesEmpty == true {
+								time.Sleep(5 * time.Second)
 								ListingDetails, _ := ReturnListingDetails(tempCred, ClientCreds, "asd-31")
 								if reflect.DeepEqual(ListingDetails.Summaries, []ListingsDetailPayloadSummaries{}) == true &&
 									reflect.DeepEqual(ListingDetails.Issues, []ListingsDetailPayloadIssuses{}) == true {
@@ -433,8 +434,7 @@ func main() {
 									break
 								}
 								// Both summaries and issues have data, case 3. Listing is created and updated.
-							} else if reflect.DeepEqual(ListingDetails.Summaries, []ListingsDetailPayloadSummaries{}) == false &&
-								reflect.DeepEqual(ListingDetails.Issues, []ListingsDetailPayloadIssuses{}) == false { // check if summaries and issues are empty
+							} else if isSummariesEmpty == false && isIssuesEmpty == true { // check if summaries and issues are empty
 								logger.Errorf("Listing %s is suppressed and not discorable nor buyable due to: ", tempASIN)
 								for _, issue := range ListingDetails.Issues {
 									logger.Errorln("Code: ", issue.Code, "Message: ", issue.Message)
@@ -444,7 +444,6 @@ func main() {
 								logger.Errorln("If message is blank, then only vendor can fix the problem.")
 								break
 							}
-
 						}
 					}
 				} else {
