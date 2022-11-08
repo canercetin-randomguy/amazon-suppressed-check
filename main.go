@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
@@ -18,166 +19,148 @@ import (
 	"time"
 )
 
+//
+// USED TO STORE TEAM NAMES, TO SORT OUT SEARCH RESULTS
+//
+
+type NBATeams []struct {
+	TeamID       int    `json:"teamId"`
+	Abbreviation string `json:"abbreviation"`
+	TeamName     string `json:"teamName"`
+	SimpleName   string `json:"simpleName"`
+	Location     string `json:"location"`
+}
+
+type NFLTeams []struct {
+	City string `json:"city"`
+	Name string `json:"name"`
+	Abr  string `json:"abr"`
+	Conf string `json:"conf"`
+	Div  string `json:"div"`
+}
+
+type NHLTeams []struct {
+	Name string `json:"name"`
+	City string `json:"city"`
+}
+
+type MLBTeams struct {
+	TeamAll struct {
+		CopyRight    string `json:"copyRight"`
+		QueryResults struct {
+			Created   string `json:"created"`
+			TotalSize string `json:"totalSize"`
+			Row       []struct {
+				PhoneNumber        string `json:"phone_number"`
+				VenueName          string `json:"venue_name"`
+				FranchiseCode      string `json:"franchise_code"`
+				SportFull          string `json:"sport_full"`
+				AllStarSw          string `json:"all_star_sw"`
+				SportCode          string `json:"sport_code"`
+				AddressCity        string `json:"address_city"`
+				City               string `json:"city"`
+				NameDisplayFull    string `json:"name_display_full"`
+				SpringLeagueAbbrev string `json:"spring_league_abbrev"`
+				TimeZoneAlt        string `json:"time_zone_alt"`
+				SportID            string `json:"sport_id"`
+				VenueID            string `json:"venue_id"`
+				MlbOrgID           string `json:"mlb_org_id"`
+				MlbOrg             string `json:"mlb_org"`
+				LastYearOfPlay     string `json:"last_year_of_play"`
+				LeagueFull         string `json:"league_full"`
+				LeagueID           string `json:"league_id"`
+				NameAbbrev         string `json:"name_abbrev"`
+				AddressProvince    string `json:"address_province"`
+				BisTeamCode        string `json:"bis_team_code"`
+				League             string `json:"league"`
+				SpringLeague       string `json:"spring_league"`
+				BaseURL            string `json:"base_url"`
+				AddressZip         string `json:"address_zip"`
+				SportCodeDisplay   string `json:"sport_code_display"`
+				MlbOrgShort        string `json:"mlb_org_short"`
+				TimeZone           string `json:"time_zone"`
+				AddressLine1       string `json:"address_line1"`
+				MlbOrgBrief        string `json:"mlb_org_brief"`
+				AddressLine2       string `json:"address_line2"`
+				AddressLine3       string `json:"address_line3"`
+				DivisionAbbrev     string `json:"division_abbrev"`
+				SportAbbrev        string `json:"sport_abbrev"`
+				NameDisplayShort   string `json:"name_display_short"`
+				TeamID             string `json:"team_id"`
+				ActiveSw           string `json:"active_sw"`
+				AddressIntl        string `json:"address_intl"`
+				State              string `json:"state"`
+				AddressCountry     string `json:"address_country"`
+				MlbOrgAbbrev       string `json:"mlb_org_abbrev"`
+				Division           string `json:"division"`
+				Name               string `json:"name"`
+				TeamCode           string `json:"team_code"`
+				SportCodeName      string `json:"sport_code_name"`
+				WebsiteURL         string `json:"website_url"`
+				FirstYearOfPlay    string `json:"first_year_of_play"`
+				LeagueAbbrev       string `json:"league_abbrev"`
+				NameDisplayLong    string `json:"name_display_long"`
+				StoreURL           string `json:"store_url"`
+				NameShort          string `json:"name_short"`
+				AddressState       string `json:"address_state"`
+				DivisionFull       string `json:"division_full"`
+				SpringLeagueFull   string `json:"spring_league_full"`
+				Address            string `json:"address"`
+				NameDisplayBrief   string `json:"name_display_brief"`
+				FileCode           string `json:"file_code"`
+				DivisionID         string `json:"division_id"`
+				SpringLeagueID     string `json:"spring_league_id"`
+				VenueShort         string `json:"venue_short"`
+			} `json:"row"`
+		} `json:"queryResults"`
+	} `json:"team_all"`
+}
+
+//
 // USED FOR LOOKING UP TO PRODUCT IF EXISTS.
+//
+
 type TeamNameforLookup struct {
 	LanguageTag   string `json:"language_tag"`
 	Value         string `json:"value"`
 	MarketplaceID string `json:"marketplace_id"`
 }
 type ItemforLookup struct {
-	Asin       string `json:"asin"`
-	Attributes struct {
-		SupplierDeclaredMaterialRegulation []struct {
-			Value         string `json:"value"`
-			MarketplaceID string `json:"marketplace_id"`
-		} `json:"supplier_declared_material_regulation"`
-		IncludedComponents []struct {
-			LanguageTag   string `json:"language_tag"`
-			Value         string `json:"value"`
-			MarketplaceID string `json:"marketplace_id"`
-		} `json:"included_components"`
-		ModelName []struct {
-			LanguageTag   string `json:"language_tag"`
-			Value         string `json:"value"`
-			MarketplaceID string `json:"marketplace_id"`
-		} `json:"model_name"`
-		BulletPoint []struct {
-			LanguageTag   string `json:"language_tag"`
-			Value         string `json:"value"`
-			MarketplaceID string `json:"marketplace_id"`
-		} `json:"bullet_point"`
-		Brand []struct {
-			LanguageTag   string `json:"language_tag"`
-			Value         string `json:"value"`
-			MarketplaceID string `json:"marketplace_id"`
-		} `json:"brand"`
-		Closure []struct {
-			Type []struct {
-				LanguageTag string `json:"language_tag"`
-				Value       string `json:"value"`
-			} `json:"type"`
-			MarketplaceID string `json:"marketplace_id"`
-		} `json:"closure"`
-		GenericKeyword []struct {
-			LanguageTag   string `json:"language_tag"`
-			Value         string `json:"value"`
-			MarketplaceID string `json:"marketplace_id"`
-		} `json:"generic_keyword"`
-		ImportDesignation []struct {
-			LanguageTag   string `json:"language_tag"`
-			Value         string `json:"value"`
-			MarketplaceID string `json:"marketplace_id"`
-		} `json:"import_designation"`
-		CpsiaCautionaryStatement []struct {
-			Value         string `json:"value"`
-			MarketplaceID string `json:"marketplace_id"`
-		} `json:"cpsia_cautionary_statement"`
-		ExternallyAssignedProductIdentifier []struct {
-			Value         string `json:"value"`
-			Type          string `json:"type"`
-			MarketplaceID string `json:"marketplace_id"`
-		} `json:"externally_assigned_product_identifier"`
-		TeamName        []TeamNameforLookup `json:"team_name"`
-		ItemTypeKeyword []struct {
-			Value         string `json:"value"`
-			MarketplaceID string `json:"marketplace_id"`
-		} `json:"item_type_keyword"`
-		NumberOfItems []struct {
-			Value         int    `json:"value"`
-			MarketplaceID string `json:"marketplace_id"`
-		} `json:"number_of_items"`
-		ItemPackageDimensions []struct {
-			Length struct {
-				Unit  string  `json:"unit"`
-				Value float64 `json:"value"`
-			} `json:"length"`
-			Width struct {
-				Unit  string  `json:"unit"`
-				Value float64 `json:"value"`
-			} `json:"width"`
-			Height struct {
-				Unit  string  `json:"unit"`
-				Value float64 `json:"value"`
-			} `json:"height"`
-			MarketplaceID string `json:"marketplace_id"`
-		} `json:"item_package_dimensions"`
-		Size []struct {
-			LanguageTag   string `json:"language_tag"`
-			Value         string `json:"value"`
-			MarketplaceID string `json:"marketplace_id"`
-		} `json:"size"`
-		PartNumber []struct {
-			Value         string `json:"value"`
-			MarketplaceID string `json:"marketplace_id"`
-		} `json:"part_number"`
-		Style []struct {
-			LanguageTag   string `json:"language_tag"`
-			Value         string `json:"value"`
-			MarketplaceID string `json:"marketplace_id"`
-		} `json:"style"`
-		Color []struct {
-			LanguageTag        string   `json:"language_tag"`
-			StandardizedValues []string `json:"standardized_values"`
-			Value              string   `json:"value"`
-			MarketplaceID      string   `json:"marketplace_id"`
-		} `json:"color"`
-		ItemTypeName []struct {
-			LanguageTag   string `json:"language_tag"`
-			Value         string `json:"value"`
-			MarketplaceID string `json:"marketplace_id"`
-		} `json:"item_type_name"`
-		ItemPackageWeight []struct {
-			Unit          string  `json:"unit"`
-			Value         float64 `json:"value"`
-			MarketplaceID string  `json:"marketplace_id"`
-		} `json:"item_package_weight"`
-		ItemShape []struct {
-			LanguageTag   string `json:"language_tag"`
-			Value         string `json:"value"`
-			MarketplaceID string `json:"marketplace_id"`
-		} `json:"item_shape"`
-		ModelNumber []struct {
-			Value         string `json:"value"`
-			MarketplaceID string `json:"marketplace_id"`
-		} `json:"model_number"`
-		Department []struct {
-			LanguageTag   string `json:"language_tag"`
-			Value         string `json:"value"`
-			MarketplaceID string `json:"marketplace_id"`
-		} `json:"department"`
-		SupplierDeclaredDgHzRegulation []struct {
-			Value         string `json:"value"`
-			MarketplaceID string `json:"marketplace_id"`
-		} `json:"supplier_declared_dg_hz_regulation"`
-		LeagueName []struct {
-			LanguageTag   string `json:"language_tag"`
-			Value         string `json:"value"`
-			MarketplaceID string `json:"marketplace_id"`
-		} `json:"league_name"`
-		ItemName []struct {
-			LanguageTag   string `json:"language_tag"`
-			Value         string `json:"value"`
-			MarketplaceID string `json:"marketplace_id"`
-		} `json:"item_name"`
-		ListPrice []struct {
-			Currency      string  `json:"currency"`
-			Value         float64 `json:"value"`
-			MarketplaceID string  `json:"marketplace_id"`
-		} `json:"list_price"`
-		BatteriesRequired []struct {
-			Value         bool   `json:"value"`
-			MarketplaceID string `json:"marketplace_id"`
-		} `json:"batteries_required"`
-		Material []struct {
-			LanguageTag   string `json:"language_tag"`
-			Value         string `json:"value"`
-			MarketplaceID string `json:"marketplace_id"`
-		} `json:"material"`
-	} `json:"attributes"`
+	Asin        string `json:"asin"`
+	Identifiers []struct {
+		MarketplaceID string `json:"marketplaceId"`
+		Identifiers   []struct {
+			IdentifierType string `json:"identifierType"`
+			Identifier     string `json:"identifier"`
+		} `json:"identifiers"`
+	} `json:"identifiers"`
 	ProductTypes []struct {
 		MarketplaceID string `json:"marketplaceId"`
 		ProductType   string `json:"productType"`
 	} `json:"productTypes"`
+	Summaries []struct {
+		MarketplaceID        string `json:"marketplaceId"`
+		AdultProduct         bool   `json:"adultProduct"`
+		Autographed          bool   `json:"autographed"`
+		Brand                string `json:"brand"`
+		BrowseClassification struct {
+			DisplayName      string `json:"displayName"`
+			ClassificationID string `json:"classificationId"`
+		} `json:"browseClassification"`
+		Color                   string `json:"color"`
+		ItemClassification      string `json:"itemClassification"`
+		ItemName                string `json:"itemName"`
+		Manufacturer            string `json:"manufacturer"`
+		Memorabilia             bool   `json:"memorabilia"`
+		ModelNumber             string `json:"modelNumber"`
+		PackageQuantity         int    `json:"packageQuantity"`
+		PartNumber              string `json:"partNumber"`
+		Size                    string `json:"size"`
+		Style                   string `json:"style"`
+		TradeInEligible         bool   `json:"tradeInEligible"`
+		WebsiteDisplayGroup     string `json:"websiteDisplayGroup"`
+		WebsiteDisplayGroupName string `json:"websiteDisplayGroupName"`
+	} `json:"summaries"`
 }
 type LookupPayload struct {
 	NumberOfResults int             `json:"numberOfResults"`
@@ -238,10 +221,9 @@ type PUTRequestData struct {
 	ProductType  string `json:"productType"`
 	Requirements string `json:"requirements"`
 	Attributes   struct {
-		Conditions        []ConditionType             `json:"condition_type"`
-		ProductIdentifier []ExternalProductIdentifier `json:"externally_assigned_product_identifier"`
-		ASIN              []MerchantSuggestedASIN     `json:"merchant_suggested_asin"`
-		Offer             []Price                     `json:"purchasable_offer"`
+		Conditions []ConditionType         `json:"condition_type"`
+		ASIN       []MerchantSuggestedASIN `json:"merchant_suggested_asin"`
+		Offer      []Price                 `json:"purchasable_offer"`
 	} `json:"attributes"`
 }
 type ProductTypeData struct {
@@ -458,7 +440,6 @@ func APIURIConstruct(operation string, endpoint string, requestPath string, para
 		if tempItemData.NumberOfResults == 0 {
 			return respData, false
 		} else {
-			fmt.Println(string(respData))
 			return respData, true
 		}
 	case "restriction":
@@ -508,13 +489,83 @@ func ReturnListingDetails(tempCred AppCredentials, ClientCreds ClientCredentials
 	return tempListingData, success
 }
 func main() {
-	var ClientCreds = ClientCredentialGenerator()
-	// create a timer that will fire when the credentials expire
-	ExpirationTimer := time.NewTimer(time.Duration(ClientCreds.ExpiresIn) * time.Second)
-	var logFile, err = os.Create("run.log")
+	// on multiple result queries, these teams are needed to sort out what we need.
+	var NBATeamList NBATeams
+	// open nba.json and unmarshal it into NBATeamList
+	jsonFile, err := os.Open("nba.json")
 	if err != nil {
 		panic(err)
 	}
+	defer jsonFile.Close()
+	byteValue, err := io.ReadAll(jsonFile)
+	if err != nil {
+		panic(err)
+	}
+	err = json.Unmarshal(byteValue, &NBATeamList)
+	if err != nil {
+		panic(err)
+	}
+	var NCAATeamList []string
+	// open ncaa.txt and append each line to NCAATeamList
+	ncaaFile, err := os.Open("ncaa.txt")
+	if err != nil {
+		panic(err)
+	}
+	defer ncaaFile.Close()
+	scanner := bufio.NewScanner(ncaaFile)
+	for scanner.Scan() {
+		NCAATeamList = append(NCAATeamList, scanner.Text())
+	}
+	var NHLTeamList NHLTeams
+	// open nhl.json and unmarshal it into NHLTeamList
+	nhlFile, err := os.Open("nhl.json")
+	if err != nil {
+		panic(err)
+	}
+	defer nhlFile.Close()
+	nhlByteValue, err := io.ReadAll(nhlFile)
+	if err != nil {
+		panic(err)
+	}
+	err = json.Unmarshal(nhlByteValue, &NHLTeamList)
+	if err != nil {
+		panic(err)
+	}
+	var NFLTeamList NFLTeams
+	// open nfl.json and unmarshal it into NFLTeamList
+	nflFile, err := os.Open("nfl.json")
+	if err != nil {
+		panic(err)
+	}
+	defer nflFile.Close()
+	nflByteValue, err := io.ReadAll(nflFile)
+	if err != nil {
+		panic(err)
+	}
+	err = json.Unmarshal(nflByteValue, &NFLTeamList)
+	if err != nil {
+		panic(err)
+	}
+	var MLBTeamList MLBTeams
+	// open mlb.json and unmarshal it into MLBTeamList
+	mlbFile, err := os.Open("mlb.json")
+	if err != nil {
+		panic(err)
+	}
+	defer mlbFile.Close()
+	mlbByteValue, err := io.ReadAll(mlbFile)
+	if err != nil {
+		panic(err)
+	}
+	err = json.Unmarshal(mlbByteValue, &MLBTeamList)
+	if err != nil {
+		panic(err)
+	}
+
+	var ClientCreds = ClientCredentialGenerator()
+	// create a timer that will fire when the credentials expire
+	ExpirationTimer := time.NewTimer(time.Duration(ClientCreds.ExpiresIn) * time.Second)
+	var logFile, _ = os.Create("run.log")
 	logger := logrus.New()
 	logger.SetOutput(logFile)
 	// OperationTimer := time.NewTimer(time.Duration(1) * time.Minute)
@@ -532,28 +583,97 @@ func main() {
 		//
 		//
 		// Call the searchCatalogItems operation to search for existing items in the Amazon catalog by product identifiers (UPC, EAN, etc.) or keywords.
-		var tempASIN = "767345396723"
-		var productName = "SOUTH DAKOTA STATE UNIVERSITY ROYAL BOTTLE OPENER KEYCHAIN"
+		var tempASIN = "767345924520"
+		var ASINValue string
+		var productName = "HAWKS - ATL - CARBON FIBER DESIGN - COLORED BOTTLE OPENER KEYCHAIN (BLACK)"
+		var teamPrefix string
+		var teamSuffix string
+		// search for bucks in the structs declared earlier
+		for _, team := range NBATeamList {
+			if strings.Contains(strings.ToLower(productName), strings.ToLower(team.SimpleName)) ||
+				strings.Contains(strings.ToLower(productName), strings.ToLower(team.Location)) {
+				teamPrefix = team.Location
+				teamSuffix = team.SimpleName
+			}
+		}
+		if teamPrefix == "" {
+			for _, team := range NHLTeamList {
+				if strings.Contains(strings.ToLower(productName), strings.ToLower(team.Name)) ||
+					strings.Contains(strings.ToLower(productName), strings.ToLower(team.City)) {
+					teamPrefix = team.City
+					teamSuffix = team.Name
+				}
+			}
+		}
+		if teamPrefix == "" {
+			for _, team := range NFLTeamList {
+				if strings.Contains(strings.ToLower(productName), strings.ToLower(team.Name)) ||
+					strings.Contains(strings.ToLower(productName), strings.ToLower(team.City)) {
+					teamPrefix = team.City
+					teamSuffix = team.Name
+				}
+			}
+		}
+		if teamPrefix == "" {
+			for _, team := range MLBTeamList.TeamAll.QueryResults.Row {
+				if strings.Contains(strings.ToLower(productName), strings.ToLower(team.Name)) ||
+					strings.Contains(strings.ToLower(productName), strings.ToLower(team.City)) {
+					teamPrefix = team.City
+					teamSuffix = team.Name
+				}
+			}
+		}
+		if teamPrefix == "" {
+			// open ncaa.txt and append each line to NCAATeamList
+			ncaaFile, err := os.Open("ncaa.txt")
+			if err != nil {
+				panic(err)
+			}
+			defer ncaaFile.Close()
+			scanner := bufio.NewScanner(ncaaFile)
+			for scanner.Scan() {
+				tempText := strings.Split(scanner.Text(), " ")
+				if strings.Contains(strings.ToLower(productName), strings.ToLower(tempText[0])) {
+					teamPrefix = tempText[0]
+					for i := 1; i < len(tempText); i++ {
+						teamSuffix = teamSuffix + tempText[i]
+					}
+				}
+			}
+
+		}
 		var searchCatalogAbsolutePath = fmt.Sprintf("/catalog/2022-04-01/items")
 		identifier := "UPC"
-		var parameters = fmt.Sprintf("identifiers=%s&identifiersType=%s&includedData=%s", tempASIN, identifier, "productTypes,attributes")
+		var parameters = fmt.Sprintf("identifiers=%s&identifiersType=%s&includedData=%s", tempASIN, identifier, "productTypes,summaries,identifiers")
 		productData, exists := APIURIConstruct("lookup", "https://sellingpartnerapi-na.amazon.com", searchCatalogAbsolutePath, parameters, "ATVPDKIKX0DER", "GET", ClientCreds, GetCredentials(), "")
 		var productLookupData LookupPayload
 		err := json.Unmarshal(productData, &productLookupData)
 		if err != nil {
 			panic(err)
 		}
-		fmt.Println(productLookupData.Items[0].Attributes.TeamName[0].Value)
+		var found bool
+		var productTypeExact string
+		fmt.Println(productLookupData.NumberOfResults)
 		if productLookupData.NumberOfResults > 1 {
 			for i := range productLookupData.Items {
-				if len(productLookupData.Items[i].Attributes.TeamName) > 0 {
-					if strings.Contains(productLookupData.Items[i].Attributes.TeamName[0].Value, productName) {
-						fmt.Println("valla var")
+				fmt.Println("Item> ", i)
+				for j := range productLookupData.Items[i].Summaries {
+					fmt.Println(productLookupData.Items[i].Summaries[j].ItemName, strings.ToLower(teamPrefix), strings.ToLower(teamSuffix))
+					if strings.Contains(strings.ToLower(productLookupData.Items[i].Summaries[j].ItemName), strings.ToLower(teamPrefix)) ||
+						strings.Contains(strings.ToLower(productLookupData.Items[i].Summaries[j].ItemName), strings.ToLower(teamSuffix)) {
+						fmt.Println("Found a match!")
+						fmt.Println("City> ", teamPrefix)
+						fmt.Println("Team> ", teamSuffix)
+						ASINValue = productLookupData.Items[i].Asin
+						productTypeExact = productLookupData.Items[i].ProductTypes[0].ProductType
+						found = true
 						break
 					}
 				}
 			}
-		} else {
+		}
+		fmt.Println("ASINValue: ", ASINValue)
+		if productLookupData.NumberOfResults == 1 || found {
 			if exists {
 				var getListingsRestrictionsAbsolutePath = fmt.Sprintf("/listings/2021-08-01/restrictions")
 				tempCred := GetCredentials()
@@ -570,17 +690,13 @@ func main() {
 					// Create a JSON file for submitting product
 					var tempProductPUT PUTRequestData
 					fmt.Println("Printing `productLookupData.Items[0].ProductTypes[0].ProductType`")
-					fmt.Println(productLookupData.Items[0].ProductTypes[0].ProductType)
-					tempProductPUT.ProductType = productLookupData.Items[0].ProductTypes[0].ProductType
-					// this is the only thing tempProductType is required for
+					if productTypeExact == "STICKER_DECAL" {
+						productTypeExact = "AUTO_ACCESSORIES"
+					}
+					tempProductPUT.ProductType = productTypeExact
 					tempProductPUT.Requirements = "LISTING_OFFER_ONLY"
 					tempProductPUT.Attributes.ASIN = append(tempProductPUT.Attributes.ASIN, MerchantSuggestedASIN{
-						Value:         "          ",
-						MarketplaceID: "ATVPDKIKX0DER",
-					})
-					tempProductPUT.Attributes.ProductIdentifier = append(tempProductPUT.Attributes.ProductIdentifier, ExternalProductIdentifier{
-						Value:         tempASIN,
-						Type:          identifier,
+						Value:         ASINValue,
 						MarketplaceID: "ATVPDKIKX0DER",
 					})
 					tempProductPUT.Attributes.Conditions = append(tempProductPUT.Attributes.Conditions, ConditionType{
