@@ -18,6 +18,16 @@ import (
 	"time"
 )
 
+type LookupPayload struct {
+	NumberOfResults int `json:"numberOfResults"`
+	Items           []struct {
+		Asin         string `json:"asin"`
+		ProductTypes []struct {
+			MarketplaceID string `json:"marketplaceId"`
+			ProductType   string `json:"productType"`
+		} `json:"productTypes"`
+	} `json:"items"`
+}
 type ListingsDetailPayloadIssuses struct {
 	Code           string   `json:"code"`
 	Message        string   `json:"message"`
@@ -44,6 +54,18 @@ type ListingsDetailPayload struct {
 	Summaries []ListingsDetailPayloadSummaries `json:"summaries"`
 	Issues    []ListingsDetailPayloadIssuses   `json:"issues"`
 }
+
+//
+//
+// USED FOR CREATING LISTINGS
+//
+//
+
+type ExternalProductIdentifier struct {
+	Value         string `json:"value"`
+	Type          string `json:"type"`
+	MarketplaceID string `json:"marketplace_id"`
+}
 type ConditionType struct {
 	Value         string `json:"value"`
 	MarketplaceID string `json:"marketplace_id"`
@@ -60,9 +82,10 @@ type PUTRequestData struct {
 	ProductType  string `json:"productType"`
 	Requirements string `json:"requirements"`
 	Attributes   struct {
-		Conditions []ConditionType         `json:"condition_type"`
-		ASIN       []MerchantSuggestedASIN `json:"merchant_suggested_asin"`
-		Offer      []Price                 `json:"purchasable_offer"`
+		Conditions        []ConditionType             `json:"condition_type"`
+		ProductIdentifier []ExternalProductIdentifier `json:"externally_assigned_product_identifier"`
+		ASIN              []MerchantSuggestedASIN     `json:"merchant_suggested_asin"`
+		Offer             []Price                     `json:"purchasable_offer"`
 	} `json:"attributes"`
 }
 type ProductTypeData struct {
@@ -241,7 +264,7 @@ func APIURIConstruct(operation string, endpoint string, requestPath string, para
 	authS2ReqURLREQ.Header.Set("Content-Type", "application/json")
 	authS2ReqURLREQ.Header.Set("x-amz-date", GetTime())
 	authS2ReqURLREQ.Header.Set("host", "sellingpartnerapi-na.amazon.com")
-	authS2ReqURLREQ.Header.Set("user-agent", "XXXXXXXXXX/1.0 (Language=Go; Platform=Windows)")
+	authS2ReqURLREQ.Header.Set("user-agent", "XXXXXXXXX/1.0 (Language=Go; Platform=Windows)")
 	// put body to request
 	authS2ReqURLREQ.Body = io.NopCloser(strings.NewReader(body))
 	// declare a new signer signer := v4.NewSigner(&credentials.Credentials{}) but only fill the third parameter.
@@ -279,6 +302,7 @@ func APIURIConstruct(operation string, endpoint string, requestPath string, para
 		if tempItemData.NumberOfResults == 0 {
 			return respData, false
 		} else {
+			fmt.Println(string(respData))
 			return respData, true
 		}
 	case "restriction":
@@ -303,6 +327,7 @@ func APIURIConstruct(operation string, endpoint string, requestPath string, para
 			return respData, true
 		}
 	case "createListing":
+		fmt.Println(string(respData))
 		return respData, true
 	case "getListing":
 		return respData, true
@@ -323,6 +348,7 @@ func ReturnListingDetails(tempCred AppCredentials, ClientCreds ClientCredentials
 	if err != nil {
 		panic(err)
 	}
+	fmt.Println(string(respData))
 	return tempListingData, success
 }
 func main() {
@@ -350,41 +376,43 @@ func main() {
 		//
 		//
 		// Call the searchCatalogItems operation to search for existing items in the Amazon catalog by product identifiers (UPC, EAN, etc.) or keywords.
-		var tempASIN = "B004Y4L4FI"
+		var tempASIN = "767345643315"
 		var searchCatalogAbsolutePath = fmt.Sprintf("/catalog/2022-04-01/items")
-		var parameters = fmt.Sprintf("identifiers=%s&identifiersType=%s", tempASIN, "ASIN")
+		identifier := "UPC"
+		var parameters = fmt.Sprintf("identifiers=%s&identifiersType=%s&includedData=%s", tempASIN, identifier, "productTypes")
 		productData, exists := APIURIConstruct("lookup", "https://sellingpartnerapi-na.amazon.com", searchCatalogAbsolutePath, parameters, "ATVPDKIKX0DER", "GET", ClientCreds, GetCredentials(), "")
-		if exists {
-			var getListingsRestrictionsAbsolutePath = fmt.Sprintf("/listings/2021-08-01/restrictions")
-			tempCred := GetCredentials()
-			parameters := fmt.Sprintf("asin=%s&sellerId=%s&marketplaceIDs=%s", tempASIN, tempCred.SellerID, "ATVPDKIKX0DER")
-			// If we are able to sell it in Amazon:
-			// Call the getProductType operation to retrieve the product type for the item.
-			_, ableToSell := APIURIConstruct("restriction", "https://sellingpartnerapi-na.amazon.com", getListingsRestrictionsAbsolutePath, parameters, "ATVPDKIKX0DER", "GET", ClientCreds, tempCred, "")
-			if ableToSell {
-				var tempItemData ProductDetails
-				err := json.Unmarshal(productData, &tempItemData)
-				if err != nil {
-					panic(err)
-				}
-				var productTypeAbsolutePath = fmt.Sprintf("/definitions/2020-09-01/productTypes/%s", strings.ToUpper(tempItemData.Items[0].Summaries[0].WebsiteDisplayGroupName))
-				parameters := fmt.Sprintf("sellerId=%s&marketplaceIds=%s&requirements=%s", tempCred.SellerID, "ATVPDKIKX0DER", "LISTING_OFFER_ONLY")
-				productType, success := APIURIConstruct("productType", "https://sellingpartnerapi-na.amazon.com", productTypeAbsolutePath, parameters, "ATVPDKIKX0DER", "GET", ClientCreds, tempCred, "")
-				if success {
+		var productLookupData LookupPayload
+		json.Unmarshal(productData, &productLookupData)
+		if productLookupData.NumberOfResults > 1 {
+			logger.Error("More than one product found, check> ", tempASIN, " manually.")
+		} else {
+			if exists {
+				var getListingsRestrictionsAbsolutePath = fmt.Sprintf("/listings/2021-08-01/restrictions")
+				tempCred := GetCredentials()
+				parameters := fmt.Sprintf("asin=%s&sellerId=%s&marketplaceIDs=%s", tempASIN, tempCred.SellerID, "ATVPDKIKX0DER")
+				// If we are able to sell it in Amazon:
+				// Call the getProductType operation to retrieve the product type for the item.
+				_, ableToSell := APIURIConstruct("restriction", "https://sellingpartnerapi-na.amazon.com", getListingsRestrictionsAbsolutePath, parameters, "ATVPDKIKX0DER", "GET", ClientCreds, tempCred, "")
+				if ableToSell {
 					// If request is successful:
 					// Unmarshal the ProductTypeData struct
-					var tempProductType ProductTypeData
-					err := json.Unmarshal(productType, &tempProductType)
 					if err != nil {
 						panic(err)
 					}
 					// Create a JSON file for submitting product
 					var tempProductPUT PUTRequestData
-					tempProductPUT.ProductType = strings.ToUpper(tempItemData.Items[0].Summaries[0].WebsiteDisplayGroupName)
+					fmt.Println("Printing `productLookupData.Items[0].ProductTypes[0].ProductType`")
+					fmt.Println(productLookupData.Items[0].ProductTypes[0].ProductType)
+					tempProductPUT.ProductType = productLookupData.Items[0].ProductTypes[0].ProductType
 					// this is the only thing tempProductType is required for
-					tempProductPUT.Requirements = tempProductType.Requirements
+					tempProductPUT.Requirements = "LISTING_OFFER_ONLY"
 					tempProductPUT.Attributes.ASIN = append(tempProductPUT.Attributes.ASIN, MerchantSuggestedASIN{
+						Value:         "          ",
+						MarketplaceID: "ATVPDKIKX0DER",
+					})
+					tempProductPUT.Attributes.ProductIdentifier = append(tempProductPUT.Attributes.ProductIdentifier, ExternalProductIdentifier{
 						Value:         tempASIN,
+						Type:          identifier,
 						MarketplaceID: "ATVPDKIKX0DER",
 					})
 					tempProductPUT.Attributes.Conditions = append(tempProductPUT.Attributes.Conditions, ConditionType{
@@ -401,7 +429,7 @@ func main() {
 						panic(err)
 					}
 					// create the listing
-					var createListingAbsolutePath = fmt.Sprintf("/listings/2021-08-01/items/%s/%s", tempCred.SellerID, "asd-31")
+					var createListingAbsolutePath = fmt.Sprintf("/listings/2021-08-01/items/%s/%s", tempCred.SellerID, "asd-676")
 					parameters := fmt.Sprintf("&marketplaceIds=%s", "ATVPDKIKX0DER")
 					_, success := APIURIConstruct("createListing", "https://sellingpartnerapi-na.amazon.com", createListingAbsolutePath, parameters, "ATVPDKIKX0DER", "PUT", ClientCreds, tempCred, string(tempProductJSON))
 					//
@@ -409,9 +437,9 @@ func main() {
 					// LISTING CREATION PROCESS IS DONE, SLEEP A BIT TO WAIT FOR THE LISTING TO BE CREATED
 					//
 					//
-					time.Sleep(10 * time.Second)
+					time.Sleep(5 * time.Second)
 					if success {
-						ListingDetails, success := ReturnListingDetails(tempCred, ClientCreds, "asd-31")
+						ListingDetails, success := ReturnListingDetails(tempCred, ClientCreds, "asd-676")
 						if success {
 							isSummariesEmpty := reflect.DeepEqual(ListingDetails.Summaries, []ListingsDetailPayloadSummaries{})
 							isIssuesEmpty := reflect.DeepEqual(ListingDetails.Issues, []ListingsDetailPayloadIssuses{})
@@ -427,7 +455,7 @@ func main() {
 								// Summaries and issues may not have data, case 2. Listing is created but not updated, yet. Sleep a bit and try again.
 							} else if isSummariesEmpty == true && isIssuesEmpty == true {
 								time.Sleep(5 * time.Second)
-								ListingDetails, _ := ReturnListingDetails(tempCred, ClientCreds, "asd-31")
+								ListingDetails, _ := ReturnListingDetails(tempCred, ClientCreds, "asd-676")
 								if reflect.DeepEqual(ListingDetails.Summaries, []ListingsDetailPayloadSummaries{}) == true &&
 									reflect.DeepEqual(ListingDetails.Issues, []ListingsDetailPayloadIssuses{}) == true {
 									logger.Errorln("There was an error creating the listing for the ASIN: ", tempASIN)
@@ -444,20 +472,18 @@ func main() {
 								logger.Errorln("If message is blank, then only vendor can fix the problem.")
 								break
 							}
+
 						}
 					}
 				} else {
-					logger.Errorln("Unable to get product type of: ", tempASIN, " from Amazon.")
+					logger.Errorln("Unable to sell: ", tempASIN, " in Amazon.")
+					break
 				}
 			} else {
-				logger.Errorln("Unable to sell: ", tempASIN, " in Amazon.")
-				return
+				logger.Errorln("ASIN: ", tempASIN, " does not exist in Amazon.")
+				break
 			}
-
-		} else {
-			logger.Errorln("ASIN: ", tempASIN, " does not exist in Amazon.")
-			return
 		}
-
 	}
+
 }
