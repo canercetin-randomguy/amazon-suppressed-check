@@ -18,16 +18,172 @@ import (
 	"time"
 )
 
-type LookupPayload struct {
-	NumberOfResults int `json:"numberOfResults"`
-	Items           []struct {
-		Asin         string `json:"asin"`
-		ProductTypes []struct {
-			MarketplaceID string `json:"marketplaceId"`
-			ProductType   string `json:"productType"`
-		} `json:"productTypes"`
-	} `json:"items"`
+// USED FOR LOOKING UP TO PRODUCT IF EXISTS.
+type TeamNameforLookup struct {
+	LanguageTag   string `json:"language_tag"`
+	Value         string `json:"value"`
+	MarketplaceID string `json:"marketplace_id"`
 }
+type ItemforLookup struct {
+	Asin       string `json:"asin"`
+	Attributes struct {
+		SupplierDeclaredMaterialRegulation []struct {
+			Value         string `json:"value"`
+			MarketplaceID string `json:"marketplace_id"`
+		} `json:"supplier_declared_material_regulation"`
+		IncludedComponents []struct {
+			LanguageTag   string `json:"language_tag"`
+			Value         string `json:"value"`
+			MarketplaceID string `json:"marketplace_id"`
+		} `json:"included_components"`
+		ModelName []struct {
+			LanguageTag   string `json:"language_tag"`
+			Value         string `json:"value"`
+			MarketplaceID string `json:"marketplace_id"`
+		} `json:"model_name"`
+		BulletPoint []struct {
+			LanguageTag   string `json:"language_tag"`
+			Value         string `json:"value"`
+			MarketplaceID string `json:"marketplace_id"`
+		} `json:"bullet_point"`
+		Brand []struct {
+			LanguageTag   string `json:"language_tag"`
+			Value         string `json:"value"`
+			MarketplaceID string `json:"marketplace_id"`
+		} `json:"brand"`
+		Closure []struct {
+			Type []struct {
+				LanguageTag string `json:"language_tag"`
+				Value       string `json:"value"`
+			} `json:"type"`
+			MarketplaceID string `json:"marketplace_id"`
+		} `json:"closure"`
+		GenericKeyword []struct {
+			LanguageTag   string `json:"language_tag"`
+			Value         string `json:"value"`
+			MarketplaceID string `json:"marketplace_id"`
+		} `json:"generic_keyword"`
+		ImportDesignation []struct {
+			LanguageTag   string `json:"language_tag"`
+			Value         string `json:"value"`
+			MarketplaceID string `json:"marketplace_id"`
+		} `json:"import_designation"`
+		CpsiaCautionaryStatement []struct {
+			Value         string `json:"value"`
+			MarketplaceID string `json:"marketplace_id"`
+		} `json:"cpsia_cautionary_statement"`
+		ExternallyAssignedProductIdentifier []struct {
+			Value         string `json:"value"`
+			Type          string `json:"type"`
+			MarketplaceID string `json:"marketplace_id"`
+		} `json:"externally_assigned_product_identifier"`
+		TeamName        []TeamNameforLookup `json:"team_name"`
+		ItemTypeKeyword []struct {
+			Value         string `json:"value"`
+			MarketplaceID string `json:"marketplace_id"`
+		} `json:"item_type_keyword"`
+		NumberOfItems []struct {
+			Value         int    `json:"value"`
+			MarketplaceID string `json:"marketplace_id"`
+		} `json:"number_of_items"`
+		ItemPackageDimensions []struct {
+			Length struct {
+				Unit  string  `json:"unit"`
+				Value float64 `json:"value"`
+			} `json:"length"`
+			Width struct {
+				Unit  string  `json:"unit"`
+				Value float64 `json:"value"`
+			} `json:"width"`
+			Height struct {
+				Unit  string  `json:"unit"`
+				Value float64 `json:"value"`
+			} `json:"height"`
+			MarketplaceID string `json:"marketplace_id"`
+		} `json:"item_package_dimensions"`
+		Size []struct {
+			LanguageTag   string `json:"language_tag"`
+			Value         string `json:"value"`
+			MarketplaceID string `json:"marketplace_id"`
+		} `json:"size"`
+		PartNumber []struct {
+			Value         string `json:"value"`
+			MarketplaceID string `json:"marketplace_id"`
+		} `json:"part_number"`
+		Style []struct {
+			LanguageTag   string `json:"language_tag"`
+			Value         string `json:"value"`
+			MarketplaceID string `json:"marketplace_id"`
+		} `json:"style"`
+		Color []struct {
+			LanguageTag        string   `json:"language_tag"`
+			StandardizedValues []string `json:"standardized_values"`
+			Value              string   `json:"value"`
+			MarketplaceID      string   `json:"marketplace_id"`
+		} `json:"color"`
+		ItemTypeName []struct {
+			LanguageTag   string `json:"language_tag"`
+			Value         string `json:"value"`
+			MarketplaceID string `json:"marketplace_id"`
+		} `json:"item_type_name"`
+		ItemPackageWeight []struct {
+			Unit          string  `json:"unit"`
+			Value         float64 `json:"value"`
+			MarketplaceID string  `json:"marketplace_id"`
+		} `json:"item_package_weight"`
+		ItemShape []struct {
+			LanguageTag   string `json:"language_tag"`
+			Value         string `json:"value"`
+			MarketplaceID string `json:"marketplace_id"`
+		} `json:"item_shape"`
+		ModelNumber []struct {
+			Value         string `json:"value"`
+			MarketplaceID string `json:"marketplace_id"`
+		} `json:"model_number"`
+		Department []struct {
+			LanguageTag   string `json:"language_tag"`
+			Value         string `json:"value"`
+			MarketplaceID string `json:"marketplace_id"`
+		} `json:"department"`
+		SupplierDeclaredDgHzRegulation []struct {
+			Value         string `json:"value"`
+			MarketplaceID string `json:"marketplace_id"`
+		} `json:"supplier_declared_dg_hz_regulation"`
+		LeagueName []struct {
+			LanguageTag   string `json:"language_tag"`
+			Value         string `json:"value"`
+			MarketplaceID string `json:"marketplace_id"`
+		} `json:"league_name"`
+		ItemName []struct {
+			LanguageTag   string `json:"language_tag"`
+			Value         string `json:"value"`
+			MarketplaceID string `json:"marketplace_id"`
+		} `json:"item_name"`
+		ListPrice []struct {
+			Currency      string  `json:"currency"`
+			Value         float64 `json:"value"`
+			MarketplaceID string  `json:"marketplace_id"`
+		} `json:"list_price"`
+		BatteriesRequired []struct {
+			Value         bool   `json:"value"`
+			MarketplaceID string `json:"marketplace_id"`
+		} `json:"batteries_required"`
+		Material []struct {
+			LanguageTag   string `json:"language_tag"`
+			Value         string `json:"value"`
+			MarketplaceID string `json:"marketplace_id"`
+		} `json:"material"`
+	} `json:"attributes"`
+	ProductTypes []struct {
+		MarketplaceID string `json:"marketplaceId"`
+		ProductType   string `json:"productType"`
+	} `json:"productTypes"`
+}
+type LookupPayload struct {
+	NumberOfResults int             `json:"numberOfResults"`
+	Items           []ItemforLookup `json:"items"`
+}
+
 type ListingsDetailPayloadIssuses struct {
 	Code           string   `json:"code"`
 	Message        string   `json:"message"`
@@ -264,7 +420,7 @@ func APIURIConstruct(operation string, endpoint string, requestPath string, para
 	authS2ReqURLREQ.Header.Set("Content-Type", "application/json")
 	authS2ReqURLREQ.Header.Set("x-amz-date", GetTime())
 	authS2ReqURLREQ.Header.Set("host", "sellingpartnerapi-na.amazon.com")
-	authS2ReqURLREQ.Header.Set("user-agent", "XXXXXXXXX/1.0 (Language=Go; Platform=Windows)")
+	authS2ReqURLREQ.Header.Set("user-agent", "XXXXXXXXXX/1.0 (Language=Go; Platform=Windows)")
 	// put body to request
 	authS2ReqURLREQ.Body = io.NopCloser(strings.NewReader(body))
 	// declare a new signer signer := v4.NewSigner(&credentials.Credentials{}) but only fill the third parameter.
@@ -376,15 +532,27 @@ func main() {
 		//
 		//
 		// Call the searchCatalogItems operation to search for existing items in the Amazon catalog by product identifiers (UPC, EAN, etc.) or keywords.
-		var tempASIN = "767345643315"
+		var tempASIN = "767345396723"
+		var productName = "SOUTH DAKOTA STATE UNIVERSITY ROYAL BOTTLE OPENER KEYCHAIN"
 		var searchCatalogAbsolutePath = fmt.Sprintf("/catalog/2022-04-01/items")
 		identifier := "UPC"
-		var parameters = fmt.Sprintf("identifiers=%s&identifiersType=%s&includedData=%s", tempASIN, identifier, "productTypes")
+		var parameters = fmt.Sprintf("identifiers=%s&identifiersType=%s&includedData=%s", tempASIN, identifier, "productTypes,attributes")
 		productData, exists := APIURIConstruct("lookup", "https://sellingpartnerapi-na.amazon.com", searchCatalogAbsolutePath, parameters, "ATVPDKIKX0DER", "GET", ClientCreds, GetCredentials(), "")
 		var productLookupData LookupPayload
-		json.Unmarshal(productData, &productLookupData)
+		err := json.Unmarshal(productData, &productLookupData)
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println(productLookupData.Items[0].Attributes.TeamName[0].Value)
 		if productLookupData.NumberOfResults > 1 {
-			logger.Error("More than one product found, check> ", tempASIN, " manually.")
+			for i := range productLookupData.Items {
+				if len(productLookupData.Items[i].Attributes.TeamName) > 0 {
+					if strings.Contains(productLookupData.Items[i].Attributes.TeamName[0].Value, productName) {
+						fmt.Println("valla var")
+						break
+					}
+				}
+			}
 		} else {
 			if exists {
 				var getListingsRestrictionsAbsolutePath = fmt.Sprintf("/listings/2021-08-01/restrictions")
@@ -441,8 +609,8 @@ func main() {
 					if success {
 						ListingDetails, success := ReturnListingDetails(tempCred, ClientCreds, "asd-676")
 						if success {
-							isSummariesEmpty := reflect.DeepEqual(ListingDetails.Summaries, []ListingsDetailPayloadSummaries{})
-							isIssuesEmpty := reflect.DeepEqual(ListingDetails.Issues, []ListingsDetailPayloadIssuses{})
+							isSummariesEmpty := len(ListingDetails.Summaries) > 0
+							isIssuesEmpty := len(ListingDetails.Issues) > 0
 							// Summaries may be empty but issues may have data, case 1.
 							if isSummariesEmpty && isIssuesEmpty == false {
 								logger.Errorf("Listing %s is suppressed and not discorable nor buyable due to: ", tempASIN)
