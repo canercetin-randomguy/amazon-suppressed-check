@@ -10,11 +10,12 @@ import (
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
+	"github.com/tealeg/xlsx"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
-	"reflect"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -174,14 +175,14 @@ type ListingsDetailPayloadIssuses struct {
 	AttributeNames []string `json:"attributeNames"`
 }
 type ListingsDetailPayloadSummaries struct {
-	MarketplaceID   string        `json:"marketplaceId"`
-	Asin            string        `json:"asin"`
-	ProductType     string        `json:"productType"`
-	ConditionType   string        `json:"conditionType"`
-	Status          []interface{} `json:"status"`
-	ItemName        string        `json:"itemName"`
-	CreatedDate     time.Time     `json:"createdDate"`
-	LastUpdatedDate time.Time     `json:"lastUpdatedDate"`
+	MarketplaceID   string    `json:"marketplaceId"`
+	Asin            string    `json:"asin"`
+	ProductType     string    `json:"productType"`
+	ConditionType   string    `json:"conditionType"`
+	Status          []string  `json:"status"`
+	ItemName        string    `json:"itemName"`
+	CreatedDate     time.Time `json:"createdDate"`
+	LastUpdatedDate time.Time `json:"lastUpdatedDate"`
 	MainImage       struct {
 		Link   string `json:"link"`
 		Height int    `json:"height"`
@@ -418,11 +419,14 @@ func APIURIConstruct(operation string, endpoint string, requestPath string, para
 		}
 	} else {
 		bodySHA256 := sha256.Sum256([]byte(body))
-		signer.SignHTTP(context.Background(), aws.Credentials{
+		err := signer.SignHTTP(context.Background(), aws.Credentials{
 			AccessKeyID:     AppCred.IAMClientID,
 			SecretAccessKey: AppCred.IAMSecretAccess,
 		}, authS2ReqURLREQ, fmt.Sprintf("%x", bodySHA256), "execute-api",
 			"us-east-1", time.Now().UTC())
+		if err != nil {
+			panic(err)
+		}
 	}
 	resp, err := http.DefaultClient.Do(authS2ReqURLREQ)
 	respData, err := io.ReadAll(resp.Body)
@@ -465,6 +469,11 @@ func APIURIConstruct(operation string, endpoint string, requestPath string, para
 		}
 	case "createListing":
 		fmt.Println(string(respData))
+		if strings.Contains(string(respData), `"status":"INVALID"`) {
+			return respData, false
+		} else {
+			return respData, true
+		}
 		return respData, true
 	case "getListing":
 		return respData, true
@@ -488,7 +497,27 @@ func ReturnListingDetails(tempCred AppCredentials, ClientCreds ClientCredentials
 	fmt.Println(string(respData))
 	return tempListingData, success
 }
+func GetSKU(cnt *int) string {
+	randomSKU := "MCS-" + strconv.Itoa(*cnt)
+	*cnt++
+	return randomSKU
+}
+func GetDataRows() []*xlsx.Row {
+	dataFile, err := xlsx.OpenFile("temp.xlsx")
+	if err != nil {
+		panic(err)
+	}
+	sh, ok := dataFile.Sheet["Sayfa1"]
+	if !ok {
+		panic("sheet not found")
+	}
+	return sh.Rows
+}
 func main() {
+	var tryCount int
+	var detailsExt bool
+	var discoverable bool
+	var cnt = 32
 	// on multiple result queries, these teams are needed to sort out what we need.
 	var NBATeamList NBATeams
 	// open nba.json and unmarshal it into NBATeamList
@@ -496,7 +525,12 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	defer jsonFile.Close()
+	defer func(jsonFile *os.File) {
+		err := jsonFile.Close()
+		if err != nil {
+			panic(err)
+		}
+	}(jsonFile)
 	byteValue, err := io.ReadAll(jsonFile)
 	if err != nil {
 		panic(err)
@@ -511,7 +545,12 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	defer ncaaFile.Close()
+	defer func(ncaaFile *os.File) {
+		err := ncaaFile.Close()
+		if err != nil {
+			panic(err)
+		}
+	}(ncaaFile)
 	scanner := bufio.NewScanner(ncaaFile)
 	for scanner.Scan() {
 		NCAATeamList = append(NCAATeamList, scanner.Text())
@@ -522,7 +561,12 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	defer nhlFile.Close()
+	defer func(nhlFile *os.File) {
+		err := nhlFile.Close()
+		if err != nil {
+			panic(err)
+		}
+	}(nhlFile)
 	nhlByteValue, err := io.ReadAll(nhlFile)
 	if err != nil {
 		panic(err)
@@ -537,7 +581,12 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	defer nflFile.Close()
+	defer func(nflFile *os.File) {
+		err := nflFile.Close()
+		if err != nil {
+			panic(err)
+		}
+	}(nflFile)
 	nflByteValue, err := io.ReadAll(nflFile)
 	if err != nil {
 		panic(err)
@@ -552,7 +601,12 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	defer mlbFile.Close()
+	defer func(mlbFile *os.File) {
+		err := mlbFile.Close()
+		if err != nil {
+			panic(err)
+		}
+	}(mlbFile)
 	mlbByteValue, err := io.ReadAll(mlbFile)
 	if err != nil {
 		panic(err)
@@ -568,204 +622,257 @@ func main() {
 	var logFile, _ = os.Create("run.log")
 	logger := logrus.New()
 	logger.SetOutput(logFile)
-	// OperationTimer := time.NewTimer(time.Duration(1) * time.Minute)
-	// If product exists in Amazon:
-	// Call the getListingsRestrictions operation with the ASIN identifier to retrieve any eligibility requirements that must be met before listing an item in the applicable condition.
-	select {
-	case <-ExpirationTimer.C:
-		ClientCreds = ClientCredentialGenerator()
-		ExpirationTimer.Reset(time.Duration(ClientCreds.ExpiresIn) * time.Second)
-	default:
-		//
-		// https://developer-docs.amazon.com/sp-api/docs/building-listings-management-workflows-guide#list-an-offer-for-an-item-that-already-exists-in-the-amazon-catalog
-		//
-		// LISTING CREATION PROCESS
-		//
-		//
-		// Call the searchCatalogItems operation to search for existing items in the Amazon catalog by product identifiers (UPC, EAN, etc.) or keywords.
-		var tempASIN = "767345924520"
-		var ASINValue string
-		var productName = "HAWKS - ATL - CARBON FIBER DESIGN - COLORED BOTTLE OPENER KEYCHAIN (BLACK)"
-		var teamPrefix string
-		var teamSuffix string
-		// search for bucks in the structs declared earlier
-		for _, team := range NBATeamList {
-			if strings.Contains(strings.ToLower(productName), strings.ToLower(team.SimpleName)) ||
-				strings.Contains(strings.ToLower(productName), strings.ToLower(team.Location)) {
-				teamPrefix = team.Location
-				teamSuffix = team.SimpleName
-			}
-		}
-		if teamPrefix == "" {
-			for _, team := range NHLTeamList {
-				if strings.Contains(strings.ToLower(productName), strings.ToLower(team.Name)) ||
-					strings.Contains(strings.ToLower(productName), strings.ToLower(team.City)) {
-					teamPrefix = team.City
-					teamSuffix = team.Name
-				}
-			}
-		}
-		if teamPrefix == "" {
-			for _, team := range NFLTeamList {
-				if strings.Contains(strings.ToLower(productName), strings.ToLower(team.Name)) ||
-					strings.Contains(strings.ToLower(productName), strings.ToLower(team.City)) {
-					teamPrefix = team.City
-					teamSuffix = team.Name
-				}
-			}
-		}
-		if teamPrefix == "" {
-			for _, team := range MLBTeamList.TeamAll.QueryResults.Row {
-				if strings.Contains(strings.ToLower(productName), strings.ToLower(team.Name)) ||
-					strings.Contains(strings.ToLower(productName), strings.ToLower(team.City)) {
-					teamPrefix = team.City
-					teamSuffix = team.Name
-				}
-			}
-		}
-		if teamPrefix == "" {
-			// open ncaa.txt and append each line to NCAATeamList
-			ncaaFile, err := os.Open("ncaa.txt")
-			if err != nil {
-				panic(err)
-			}
-			defer ncaaFile.Close()
-			scanner := bufio.NewScanner(ncaaFile)
-			for scanner.Scan() {
-				tempText := strings.Split(scanner.Text(), " ")
-				if strings.Contains(strings.ToLower(productName), strings.ToLower(tempText[0])) {
-					teamPrefix = tempText[0]
-					for i := 1; i < len(tempText); i++ {
-						teamSuffix = teamSuffix + tempText[i]
+	var teamPrefix string
+	var found bool
+	var ASINValue string
+	var teamSuffix string
+	rows := GetDataRows()
+	for i := range rows {
+		tempSKU := GetSKU(&cnt)
+		if i == 0 {
+			continue
+		} else {
+			select {
+			case <-ExpirationTimer.C:
+				ClientCreds = ClientCredentialGenerator()
+				ExpirationTimer.Reset(time.Duration(ClientCreds.ExpiresIn) * time.Second)
+				logger.Infoln("Client credentials refreshed.")
+			default:
+				//
+				// https://developer-docs.amazon.com/sp-api/docs/building-listings-management-workflows-guide#list-an-offer-for-an-item-that-already-exists-in-the-amazon-catalog
+				//
+				// LISTING CREATION PROCESS
+				//
+				//
+				// Call the searchCatalogItems operation to search for existing items in the Amazon catalog by product identifiers (UPC, EAN, etc.) or keywords.
+				var tempASIN = rows[i].Cells[2].Value
+				var productName = rows[i].Cells[1].Value
+				logger.Infoln("Searching for product with UPC: ", tempASIN)
+				logger.Infoln("With product name: ", productName)
+				// search for bucks in the structs declared earlier
+				for _, team := range NBATeamList {
+					if strings.Contains(strings.ToLower(productName), strings.ToLower(team.SimpleName)) ||
+						strings.Contains(strings.ToLower(productName), strings.ToLower(team.Location)) {
+						teamPrefix = team.Location
+						teamSuffix = team.SimpleName
 					}
 				}
-			}
-
-		}
-		var searchCatalogAbsolutePath = fmt.Sprintf("/catalog/2022-04-01/items")
-		identifier := "UPC"
-		var parameters = fmt.Sprintf("identifiers=%s&identifiersType=%s&includedData=%s", tempASIN, identifier, "productTypes,summaries,identifiers")
-		productData, exists := APIURIConstruct("lookup", "https://sellingpartnerapi-na.amazon.com", searchCatalogAbsolutePath, parameters, "ATVPDKIKX0DER", "GET", ClientCreds, GetCredentials(), "")
-		var productLookupData LookupPayload
-		err := json.Unmarshal(productData, &productLookupData)
-		if err != nil {
-			panic(err)
-		}
-		var found bool
-		var productTypeExact string
-		fmt.Println(productLookupData.NumberOfResults)
-		if productLookupData.NumberOfResults > 1 {
-			for i := range productLookupData.Items {
-				fmt.Println("Item> ", i)
-				for j := range productLookupData.Items[i].Summaries {
-					fmt.Println(productLookupData.Items[i].Summaries[j].ItemName, strings.ToLower(teamPrefix), strings.ToLower(teamSuffix))
-					if strings.Contains(strings.ToLower(productLookupData.Items[i].Summaries[j].ItemName), strings.ToLower(teamPrefix)) ||
-						strings.Contains(strings.ToLower(productLookupData.Items[i].Summaries[j].ItemName), strings.ToLower(teamSuffix)) {
-						fmt.Println("Found a match!")
-						fmt.Println("City> ", teamPrefix)
-						fmt.Println("Team> ", teamSuffix)
-						ASINValue = productLookupData.Items[i].Asin
-						productTypeExact = productLookupData.Items[i].ProductTypes[0].ProductType
-						found = true
-						break
+				if teamPrefix == "" {
+					for _, team := range NHLTeamList {
+						if strings.Contains(strings.ToLower(productName), strings.ToLower(team.Name)) ||
+							strings.Contains(strings.ToLower(productName), strings.ToLower(team.City)) {
+							teamPrefix = team.City
+							teamSuffix = team.Name
+						}
 					}
 				}
-			}
-		}
-		fmt.Println("ASINValue: ", ASINValue)
-		if productLookupData.NumberOfResults == 1 || found {
-			if exists {
-				var getListingsRestrictionsAbsolutePath = fmt.Sprintf("/listings/2021-08-01/restrictions")
-				tempCred := GetCredentials()
-				parameters := fmt.Sprintf("asin=%s&sellerId=%s&marketplaceIDs=%s", tempASIN, tempCred.SellerID, "ATVPDKIKX0DER")
-				// If we are able to sell it in Amazon:
-				// Call the getProductType operation to retrieve the product type for the item.
-				_, ableToSell := APIURIConstruct("restriction", "https://sellingpartnerapi-na.amazon.com", getListingsRestrictionsAbsolutePath, parameters, "ATVPDKIKX0DER", "GET", ClientCreds, tempCred, "")
-				if ableToSell {
-					// If request is successful:
-					// Unmarshal the ProductTypeData struct
+				if teamPrefix == "" {
+					for _, team := range NFLTeamList {
+						if strings.Contains(strings.ToLower(productName), strings.ToLower(team.Name)) ||
+							strings.Contains(strings.ToLower(productName), strings.ToLower(team.City)) {
+							teamPrefix = team.City
+							teamSuffix = team.Name
+						}
+					}
+				}
+				if teamPrefix == "" {
+					for _, team := range MLBTeamList.TeamAll.QueryResults.Row {
+						if strings.Contains(strings.ToLower(productName), strings.ToLower(team.Name)) ||
+							strings.Contains(strings.ToLower(productName), strings.ToLower(team.City)) {
+							teamPrefix = team.City
+							teamSuffix = team.Name
+						}
+					}
+				}
+				if teamPrefix == "" {
+					// open ncaa.txt and append each line to NCAATeamList
+					ncaaFile, err := os.Open("ncaa.txt")
 					if err != nil {
 						panic(err)
 					}
-					// Create a JSON file for submitting product
-					var tempProductPUT PUTRequestData
-					fmt.Println("Printing `productLookupData.Items[0].ProductTypes[0].ProductType`")
-					if productTypeExact == "STICKER_DECAL" {
-						productTypeExact = "AUTO_ACCESSORIES"
+					defer func(ncaaFile *os.File) {
+						err := ncaaFile.Close()
+						if err != nil {
+							panic(err)
+						}
+					}(ncaaFile)
+					scanner := bufio.NewScanner(ncaaFile)
+					for scanner.Scan() {
+						tempText := strings.Split(scanner.Text(), " ")
+						if strings.Contains(strings.ToLower(productName), strings.ToLower(tempText[0])) {
+							teamPrefix = tempText[0]
+							for i := 1; i < len(tempText); i++ {
+								teamSuffix = teamSuffix + tempText[i]
+							}
+						}
 					}
-					tempProductPUT.ProductType = productTypeExact
-					tempProductPUT.Requirements = "LISTING_OFFER_ONLY"
-					tempProductPUT.Attributes.ASIN = append(tempProductPUT.Attributes.ASIN, MerchantSuggestedASIN{
-						Value:         ASINValue,
-						MarketplaceID: "ATVPDKIKX0DER",
-					})
-					tempProductPUT.Attributes.Conditions = append(tempProductPUT.Attributes.Conditions, ConditionType{
-						Value:         "new_new",
-						MarketplaceID: "ATVPDKIKX0DER",
-					})
-					tempProductPUT.Attributes.Offer = append(tempProductPUT.Attributes.Offer, Price{
-						Value:         "0.0",
-						MarketplaceID: "ATVPDKIKX0DER",
-					})
-					// convert the struct to json
-					tempProductJSON, err := json.Marshal(tempProductPUT)
-					if err != nil {
-						panic(err)
-					}
-					// create the listing
-					var createListingAbsolutePath = fmt.Sprintf("/listings/2021-08-01/items/%s/%s", tempCred.SellerID, "asd-676")
-					parameters := fmt.Sprintf("&marketplaceIds=%s", "ATVPDKIKX0DER")
-					_, success := APIURIConstruct("createListing", "https://sellingpartnerapi-na.amazon.com", createListingAbsolutePath, parameters, "ATVPDKIKX0DER", "PUT", ClientCreds, tempCred, string(tempProductJSON))
-					//
-					//
-					// LISTING CREATION PROCESS IS DONE, SLEEP A BIT TO WAIT FOR THE LISTING TO BE CREATED
-					//
-					//
-					time.Sleep(5 * time.Second)
-					if success {
-						ListingDetails, success := ReturnListingDetails(tempCred, ClientCreds, "asd-676")
-						if success {
-							isSummariesEmpty := len(ListingDetails.Summaries) > 0
-							isIssuesEmpty := len(ListingDetails.Issues) > 0
-							// Summaries may be empty but issues may have data, case 1.
-							if isSummariesEmpty && isIssuesEmpty == false {
-								logger.Errorf("Listing %s is suppressed and not discorable nor buyable due to: ", tempASIN)
-								for _, issue := range ListingDetails.Issues {
-									logger.Errorln("Code: ", issue.Code, "Message: ", issue.Message)
-									logger.Errorln("Severity: ", issue.Severity)
-								}
-								logger.Errorln("If message is blank, then only vendor can fix the problem.")
-								break
-								// Summaries and issues may not have data, case 2. Listing is created but not updated, yet. Sleep a bit and try again.
-							} else if isSummariesEmpty == true && isIssuesEmpty == true {
-								time.Sleep(5 * time.Second)
-								ListingDetails, _ := ReturnListingDetails(tempCred, ClientCreds, "asd-676")
-								if reflect.DeepEqual(ListingDetails.Summaries, []ListingsDetailPayloadSummaries{}) == true &&
-									reflect.DeepEqual(ListingDetails.Issues, []ListingsDetailPayloadIssuses{}) == true {
-									logger.Errorln("There was an error creating the listing for the ASIN: ", tempASIN)
-									break
-								}
-								// Both summaries and issues have data, case 3. Listing is created and updated.
-							} else if isSummariesEmpty == false && isIssuesEmpty == true { // check if summaries and issues are empty
-								logger.Errorf("Listing %s is suppressed and not discorable nor buyable due to: ", tempASIN)
-								for _, issue := range ListingDetails.Issues {
-									logger.Errorln("Code: ", issue.Code, "Message: ", issue.Message)
-									logger.Errorln("Severity: ", issue.Severity)
-								}
-								logger.Errorln("Summary status: ", ListingDetails.Summaries)
-								logger.Errorln("If message is blank, then only vendor can fix the problem.")
+				}
+				var searchCatalogAbsolutePath = fmt.Sprintf("/catalog/2022-04-01/items")
+				identifier := "UPC"
+				var parameters = fmt.Sprintf("identifiers=%s&identifiersType=%s&includedData=%s", tempASIN, identifier, "productTypes,summaries,identifiers")
+				productData, exists := APIURIConstruct("lookup", "https://sellingpartnerapi-na.amazon.com", searchCatalogAbsolutePath, parameters, "ATVPDKIKX0DER", "GET", ClientCreds, GetCredentials(), "")
+				var productLookupData LookupPayload
+				err := json.Unmarshal(productData, &productLookupData)
+				if err != nil {
+					panic(err)
+				}
+				fmt.Println(productLookupData.NumberOfResults)
+				if productLookupData.NumberOfResults > 1 {
+					for i := range productLookupData.Items {
+						fmt.Println("Item> ", i)
+						for j := range productLookupData.Items[i].Summaries {
+							fmt.Println(productLookupData.Items[i].Summaries[j].ItemName, strings.ToLower(teamPrefix), strings.ToLower(teamSuffix))
+							if strings.Contains(strings.ToLower(productLookupData.Items[i].Summaries[j].ItemName), strings.ToLower(teamPrefix)) ||
+								strings.Contains(strings.ToLower(productLookupData.Items[i].Summaries[j].ItemName), strings.ToLower(teamSuffix)) {
+								fmt.Println("Found a match!")
+								fmt.Println("City> ", teamPrefix)
+								fmt.Println("Team> ", teamSuffix)
+								ASINValue = productLookupData.Items[i].Asin
+								found = true
 								break
 							}
-
 						}
 					}
 				} else {
-					logger.Errorln("Unable to sell: ", tempASIN, " in Amazon.")
-					break
+					if len(productLookupData.Items) > 0 {
+						if len(productLookupData.Items[0].Asin) > 0 {
+							// save productLookupData to a file
+							f, err := os.Create("productLookupData.json")
+							if err != nil {
+								panic(err)
+							}
+							defer func(f *os.File) {
+								err := f.Close()
+								if err != nil {
+									panic(err)
+								}
+							}(f)
+							_, err = f.WriteString(string(productData))
+							if err != nil {
+								return
+							}
+							ASINValue = productLookupData.Items[0].Asin
+							found = true
+						} else {
+							found = false
+							break
+						}
+					} else {
+						found = false
+					}
 				}
-			} else {
-				logger.Errorln("ASIN: ", tempASIN, " does not exist in Amazon.")
-				break
+				fmt.Println("ASINValue: ", ASINValue)
+				if productLookupData.NumberOfResults == 1 || found {
+					if exists {
+						// If product exists in Amazon:
+						// Call the getListingsRestrictions operation with the ASIN identifier to retrieve any eligibility requirements that must be met before listing an item in the applicable condition.
+						var getListingsRestrictionsAbsolutePath = fmt.Sprintf("/listings/2021-08-01/restrictions")
+						tempCred := GetCredentials()
+						parameters := fmt.Sprintf("asin=%s&sellerId=%s&marketplaceIDs=%s", tempASIN, tempCred.SellerID, "ATVPDKIKX0DER")
+						// If we are able to sell it in Amazon:
+						// Call the getProductType operation to retrieve the product type for the item.
+						_, ableToSell := APIURIConstruct("restriction", "https://sellingpartnerapi-na.amazon.com", getListingsRestrictionsAbsolutePath, parameters, "ATVPDKIKX0DER", "GET", ClientCreds, tempCred, "")
+						if ableToSell {
+							// If request is successful:
+							// Unmarshal the ProductTypeData struct
+							if err != nil {
+								panic(err)
+							}
+							// Create a JSON file for submitting product
+							var tempProductPUT PUTRequestData
+							tempProductPUT.ProductType = "PRODUCT"
+							tempProductPUT.Requirements = "LISTING_OFFER_ONLY"
+							tempProductPUT.Attributes.ASIN = append(tempProductPUT.Attributes.ASIN, MerchantSuggestedASIN{
+								Value:         ASINValue,
+								MarketplaceID: "ATVPDKIKX0DER",
+							})
+							tempProductPUT.Attributes.Conditions = append(tempProductPUT.Attributes.Conditions, ConditionType{
+								Value:         "new_new",
+								MarketplaceID: "ATVPDKIKX0DER",
+							})
+							tempProductPUT.Attributes.Offer = append(tempProductPUT.Attributes.Offer, Price{
+								Value:         "0.0",
+								MarketplaceID: "ATVPDKIKX0DER",
+							})
+							// convert the struct to json
+							tempProductJSON, err := json.Marshal(tempProductPUT)
+							if err != nil {
+								panic(err)
+							}
+							// create the listing
+							var createListingAbsolutePath = fmt.Sprintf("/listings/2021-08-01/items/%s/%s", tempCred.SellerID, tempSKU)
+							parameters := fmt.Sprintf("&marketplaceIds=%s", "ATVPDKIKX0DER")
+							_, success := APIURIConstruct("createListing", "https://sellingpartnerapi-na.amazon.com", createListingAbsolutePath, parameters, "ATVPDKIKX0DER", "PUT", ClientCreds, tempCred, string(tempProductJSON))
+							//
+							//
+							// LISTING CREATION PROCESS IS DONE, SLEEP A BIT TO WAIT FOR THE LISTING TO BE CREATED
+							//
+							//
+							time.Sleep(5 * time.Second)
+							if success {
+								listingsDetail, _ := ReturnListingDetails(tempCred, ClientCreds, tempSKU)
+								if len(listingsDetail.Summaries) > 0 {
+									for j := range listingsDetail.Summaries[0].Status {
+										if listingsDetail.Summaries[0].Status[j] == "DISCOVERABLE" {
+											logger.Infoln("Listing is created.")
+											discoverable = true
+										}
+									}
+								} else {
+									for {
+										listingsDetail, _ = ReturnListingDetails(tempCred, ClientCreds, tempSKU)
+										if len(listingsDetail.Summaries) > 0 || (len(listingsDetail.Issues) > 0) {
+											if len(listingsDetail.Summaries) > 0 {
+												for j := range listingsDetail.Summaries[0].Status {
+													fmt.Println(listingsDetail.Summaries[0].Status[j])
+													if listingsDetail.Summaries[0].Status[j] == "DISCOVERABLE" {
+														logger.Infoln("Listing is created.")
+														discoverable = true
+														detailsExt = true
+														break
+													}
+												}
+											}
+											if len(listingsDetail.Issues) > 0 {
+												logger.Errorln("Errors: ")
+												for j := range listingsDetail.Issues {
+													logger.Error(listingsDetail.Issues[j].Code)
+													logger.Errorln(listingsDetail.Issues[j].Message)
+												}
+											}
+											detailsExt = true
+										}
+										if detailsExt {
+											break
+										}
+										tryCount++
+										if tryCount > 5 {
+											logger.Errorln("Listing retrieve failed after 5 tries.")
+											break
+										}
+										time.Sleep(1 * time.Second)
+									}
+									if discoverable == false {
+										logger.Errorln("Listing is search suppressed.")
+									}
+									detailsExt = false
+									discoverable = false
+									tryCount = 0
+								}
+							} else {
+								logger.Errorln("Listing creation failed.")
+								break
+							}
+						} else {
+							logger.Errorln("Unable to sell: ", tempASIN, " in Amazon.")
+							break
+						}
+					} else {
+						logger.Errorln("ASIN: ", tempASIN, " does not exist in Amazon.")
+						break
+					}
+				}
+				time.Sleep(3 * time.Second)
 			}
 		}
 	}
