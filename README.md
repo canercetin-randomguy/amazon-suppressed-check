@@ -12,10 +12,8 @@ Workflow:
 7. If items data from endpoint contains either team prefix or suffix, get ASIN and product type of item.
 8. Request restrictions from /listings/2021-08-01/restrictions, if no restrictions proceed.
 9. Make a request to /listings/2021-08-01/items/%s/%s, where first parameter is seller ID, and second is SKU, marshal the body query and hash it.
-10. Detect if there is any issues, by if issues are non-empty or summary is empty (not BUYABLE,DISCOVERABLE etc.) If it is problematic, then it is either incompleted, or search suppressed.
-
-TODO: Declare tempASIN and productName from csv file, so automate it.
-
-TODO: Change workflow depending on number of search results from /catalog/2022-04-01/items
+10. Create all listings and append their SKU's to an array.
+10. Detect if there is any issues on SKU's from the array, by if issues are non-empty or summary is empty (not BUYABLE,DISCOVERABLE etc.) If it is problematic, then it is either incompleted, or search suppressed.
 
 
+god this piece of shit API took my days to tame it.
