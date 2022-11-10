@@ -348,7 +348,7 @@ func APIURIConstruct(operation string, endpoint string, requestPath string, para
 	authS2ReqURLREQ.Header.Set("Content-Type", "application/json")
 	authS2ReqURLREQ.Header.Set("x-amz-date", GetTime())
 	authS2ReqURLREQ.Header.Set("host", "sellingpartnerapi-na.amazon.com")
-	authS2ReqURLREQ.Header.Set("user-agent", "XXXXXXXXXX/1.0 (Language=Go; Platform=Windows)")
+	authS2ReqURLREQ.Header.Set("user-agent", "XXXXXXXXXXX/1.0 (Language=Go; Platform=Windows)")
 	// put body to request
 	authS2ReqURLREQ.Body = io.NopCloser(strings.NewReader(body))
 	// declare a new signer signer := v4.NewSigner(&credentials.Credentials{}) but only fill the third parameter.
@@ -853,21 +853,8 @@ func main() {
 						status = "DISCOVERABLE_WITH_ERRORS"
 					}
 				}
-				if len(listingsDetail.Issues) > 0 && len(listingsDetail.Summaries) > 0 {
-					for j := range listingsDetail.Summaries[0].Status {
-						fmt.Println(listingsDetail.Summaries[0].Status[j])
-						if listingsDetail.Summaries[0].Status[j] == "DISCOVERABLE" {
-							logger.Infoln("Listing is created.")
-							detailsExt = true
-							status = "DISCOVERABLE"
-						} else {
-							logger.Infoln("Listing is search suppressed.")
-							detailsExt = true
-							status = "SEARCH_SUPPRESSED"
-						}
-					}
-				}
-				if len(listingsDetail.Issues) == 0 && len(listingsDetail.Summaries) > 1 {
+				if (len(listingsDetail.Issues) > 0 && len(listingsDetail.Summaries) > 0) ||
+					(len(listingsDetail.Issues) == 0 && len(listingsDetail.Summaries) > 1) {
 					for j := range listingsDetail.Summaries[0].Status {
 						fmt.Println(listingsDetail.Summaries[0].Status[j])
 						if listingsDetail.Summaries[0].Status[j] == "DISCOVERABLE" {
@@ -882,8 +869,17 @@ func main() {
 					}
 				}
 				if detailsExt {
+					var itemname string
+					var asin string
+					if len(listingsDetail.Summaries) == 0 {
+						itemname = skuList[SKU]
+						asin = "UNKNOWN"
+					} else {
+						itemname = listingsDetail.Summaries[0].ItemName
+						asin = listingsDetail.Summaries[0].Asin
+					}
 					tempRowData := []string{
-						listingsDetail.Summaries[0].ItemName, listingsDetail.Summaries[0].Asin, status, string(listingsDetailJSON),
+						itemname, asin, status, string(listingsDetailJSON),
 					}
 					csvReader.Write(tempRowData)
 					csvReader.Flush()
